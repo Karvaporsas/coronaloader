@@ -1,0 +1,27 @@
+{
+  "name": "coronaloader",
+  "version": "1.0.0",
+  "description": "Loads corona virus data from sources",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "del coronaloadercore.zip",
+    "build": "7z a coronaloadercore.zip loaders handlers *.js",
+    "deploy": "aws lambda update-function-code --function-name CoronaLoader --zip-file fileb://coronaloadercore.zip --publish",
+    "chaindeploy": "npm run clean && npm run build && npm run deploy"
+  },
+  "keywords": [
+    "corona",
+    "virus",
+    "data"
+  ],
+  "author": "Touko Hjelt",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "^2.601.0",
+    "cheerio": "^1.0.0-rc.3",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.5",
+    "uuid": "^3.3.3"
+  }
+}
