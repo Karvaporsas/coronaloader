@@ -130,7 +130,6 @@ module.exports = {
     insertCoronaCase(type, coronaCase) {
         return new Promise((resolve, reject) => {
             var tableName = '';
-            console.log(`Inserting ${coronaCase.id} to ${type}`);
             switch (type) {
                 case corona_info_type.CONFIRMED:
                     tableName = CONFIRMED_TABLE;
@@ -211,7 +210,6 @@ module.exports = {
     },
     updateConfirmedCase(coronaCase) {
         return new Promise((resolve, reject) => {
-            console.log(`Updating confirmed ${coronaCase.id}`);
             var params = {
                 TableName: CONFIRMED_TABLE,
                 Key: {
@@ -248,7 +246,6 @@ module.exports = {
     },
     updateRecoveredCase(coronaCase) {
         return new Promise((resolve, reject) => {
-            console.log(`Updating recovered ${coronaCase.id}`);
             var params = {
                 TableName: RECOVERED_TABLE,
                 Key: {
@@ -281,12 +278,12 @@ module.exports = {
     },
     updateDeadCase(coronaCase) {
         return new Promise((resolve, reject) => {
-            console.log(`Updating death ${coronaCase.id}`);
             resolve({status: 0, message: 'success'});
         });
     },
     updateOperation(operation) {
         return new Promise((resolve, reject) => {
+            console.log('Updating operation');
             var d = new Date();
             var params = {
                 TableName: OPERATIONS_TABLE,
