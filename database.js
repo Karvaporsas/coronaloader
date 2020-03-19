@@ -3,6 +3,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const _ = require('underscore');
 const utils = require('./utils');
 const OPERATIONS_TABLE = process.env.TABLE_OPERATIONS;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
@@ -10,11 +11,32 @@ const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const CONFIRMED_TABLE = process.env.CONFIRMED_TABLE;
 const DEATHS_TABLE = process.env.DEATHS_TABLE;
 const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
-const corona_info_type = {
+const CORONA_INFO_TYPE = {
     'DEATH': 'DEATH',
     'RECOVERED': 'RECOVERED',
     'CONFIRMED': 'CONFIRMED'
 };
+const OPERATION_TYPE = {
+    'INSERT': 'INSERT',
+    'UPDATE': 'UPDATE',
+    'DELETE': 'DELETE'
+};
+
+function _getOperationType(list, id) {
+    return _.chain(list)
+        .map(function (c) {
+            return c.id;
+        })
+        .contains(id)
+        .value() ? OPERATION_TYPE.UPDATE : OPERATION_TYPE.INSERT;
+}
+
+function _getDifference(oldCases, inputCases) {
+    var oldMap = _.map(oldCases, function(c) {return c.id; });
+    var inputMap = _.map(inputCases, function (c) { return c.id; });
+
+    return _.difference(oldMap, inputMap);
+}
 
 function _insertCasePromise(type, coronaCase, self, insertedCases) {
     return self.insertCoronaCase(type, coronaCase).then((res) => {
@@ -24,44 +46,38 @@ function _insertCasePromise(type, coronaCase, self, insertedCases) {
     });
 }
 
-function _updateCasePromise(type, coronaCase, self, updatedCases) {
+function _updateCasePromise(operationType, type, coronaCase, self, updatedCases) {
     return new Promise((resolve, reject) => {
-        self.hasCase(type, coronaCase.id).then((res) => {
-            if (res == true) {
-                switch (type) {
-                    case corona_info_type.CONFIRMED:
-                        self.updateConfirmedCase(coronaCase).then((res) => {
-                          if (res && res.status) updatedCases.push(res);
-                          resolve();
-                        });
-                        break;
-                    case corona_info_type.DEATH:
-                        self.updateDeadCase(coronaCase).then((res) => {
-                            if (res && res.status) updatedCases.push(res);
-                        });
+        if (operationType == OPERATION_TYPE.UPDATE) {
+            switch (type) {
+                case CORONA_INFO_TYPE.CONFIRMED:
+                    self.updateConfirmedCase(coronaCase).then((res) => {
+                        if (res && res.status) updatedCases.push(res);
                         resolve();
-                        break;
-                    case corona_info_type.RECOVERED:
-                        self.updateRecoveredCase(coronaCase).then((res) => {
-                            if (res && res.status) updatedCases.push(res);
-                        });
-                        resolve();
-                        break;
-                    default:
-                        reject(`Unknown type ${type}`);
-                        break;
-                }
-            } else {
-                self.insertCoronaCase(type, coronaCase).then((res) => {
-                    if (res) updatedCases.push(res);
+                    });
+                    break;
+                case CORONA_INFO_TYPE.DEATH:
+                    self.updateDeadCase(coronaCase).then((res) => {
+                        if (res && res.status) updatedCases.push(res);
+                    });
                     resolve();
-                });
+                    break;
+                case CORONA_INFO_TYPE.RECOVERED:
+                    self.updateRecoveredCase(coronaCase).then((res) => {
+                        if (res && res.status) updatedCases.push(res);
+                    });
+                    resolve();
+                    break;
+                default:
+                    reject(`Unknown type ${type}`);
+                    break;
             }
-        }).catch((e) => {
-            console.error(`Error getting case ${coronaCase.id} with type ${type}`);
-            console.log(e);
-            reject(`error getting case ${coronaCase.id} with type ${type}`);
-        });
+        } else {
+            self.insertCoronaCase(type, coronaCase).then((res) => {
+                if (res) updatedCases.push(res);
+                resolve();
+            });
+        }
     });
 }
 
@@ -78,13 +94,13 @@ module.exports = {
                 var promises = [];
 
                 for (const coronaCase of cases.confirmed) {
-                    promises.push(_insertCasePromise(corona_info_type.CONFIRMED, coronaCase, this, insertedCases));
+                    promises.push(_insertCasePromise(CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, insertedCases));
                 }
                 for (const coronaCase of cases.deaths) {
-                    promises.push(_insertCasePromise(corona_info_type.DEATH, coronaCase, this, insertedCases));
+                    promises.push(_insertCasePromise(CORONA_INFO_TYPE.DEATH, coronaCase, this, insertedCases));
                 }
                 for (const coronaCase of cases.recovered) {
-                    promises.push(_insertCasePromise(corona_info_type.RECOVERED, coronaCase, this, insertedCases));
+                    promises.push(_insertCasePromise(CORONA_INFO_TYPE.RECOVERED, coronaCase, this, insertedCases));
                 }
 
                 Promise.all(promises).then(() => {
@@ -100,27 +116,45 @@ module.exports = {
     updateCases(cases) {
         return new Promise((resolve, reject) => {
             var updatedCases = [];
+
             if (!cases) {
                 if (DEBUG_MODE) {
                     console.log('Nothing to update!');
                 }
                 resolve({status: 0, message: 'nothing to update'});
             } else {
-                var promises = [];
-                for (const coronaCase of cases.confirmed) {
-                    promises.push(_updateCasePromise(corona_info_type.CONFIRMED, coronaCase, this, updatedCases));
-                }
-                for (const coronaCase of cases.deaths) {
-                    promises.push(_updateCasePromise(corona_info_type.DEATH, coronaCase, this, updatedCases));
-                }
-                for (const coronaCase of cases.recovered) {
-                    promises.push(_updateCasePromise(corona_info_type.RECOVERED, coronaCase, this, updatedCases));
-                }
+                var initialPromises = [];
 
-                Promise.all(promises).then(() => {
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED));
+
+                Promise.all(initialPromises).then((allInitialResults) => {
+                    var promises = [];
+                    for (const toDelete of _getDifference(allInitialResults[0], cases.confirmed)) {
+                        promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
+                    }
+                    for (const toDelete of _getDifference(allInitialResults[1], cases.deaths)) {
+                        promises.push(this.markAsDeleted(CORONA_INFO_TYPE.DEATH, toDelete));
+                    }
+                    for (const toDelete of _getDifference(allInitialResults[2], cases.recovered)) {
+                        promises.push(this.markAsDeleted(CORONA_INFO_TYPE.RECOVERED, toDelete));
+                    }
+                    for (const coronaCase of cases.confirmed) {
+                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[0], coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
+                    }
+                    for (const coronaCase of cases.deaths) {
+                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[1], coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
+                    }
+                    for (const coronaCase of cases.recovered) {
+                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[2], coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
+                    }
+
+                    return Promise.all(promises);
+                }).then(() => {
                     resolve({status: 1, message: `${updatedCases.length} cases updated`});
                 }).catch((e) => {
-                    console.log('Error inserting cases');
+                    console.log('error getting initial results on updateCases');
                     console.log(e);
                     reject(e);
                 });
@@ -131,13 +165,13 @@ module.exports = {
         return new Promise((resolve, reject) => {
             var tableName = '';
             switch (type) {
-                case corona_info_type.CONFIRMED:
+                case CORONA_INFO_TYPE.CONFIRMED:
                     tableName = CONFIRMED_TABLE;
                     break;
-                case corona_info_type.DEATH:
+                case CORONA_INFO_TYPE.DEATH:
                     tableName = DEATHS_TABLE;
                     break;
-                case corona_info_type.RECOVERED:
+                case CORONA_INFO_TYPE.RECOVERED:
                     tableName = RECOVERED_TABLE;
                     break;
                 default:
@@ -164,18 +198,58 @@ module.exports = {
             });
         });
     },
-    hasCase(type, id) {
+    getCaseInfos(type) {
         return new Promise((resolve, reject) => {
             var tableName = '';
 
             switch (type) {
-                case corona_info_type.CONFIRMED:
+                case CORONA_INFO_TYPE.CONFIRMED:
                     tableName = CONFIRMED_TABLE;
                     break;
-                case corona_info_type.DEATH:
+                case CORONA_INFO_TYPE.DEATH:
                     tableName = DEATHS_TABLE;
                     break;
-                case corona_info_type.RECOVERED:
+                case CORONA_INFO_TYPE.RECOVERED:
+                    tableName = RECOVERED_TABLE;
+                    break;
+                default:
+                    tableName = '';
+                    break;
+            }
+
+            var params = {
+                TableName: tableName,
+                ProjectionExpression: '#id',
+                ExpressionAttributeNames: {
+                    '#id': 'id'
+                }
+            };
+
+            utils.performScan(dynamoDb, params).then((cases) => {
+                if (!cases || !cases.length) {
+                    resolve([]);
+                } else {
+                    resolve(cases);
+                }
+            }).catch((e) => {
+                console.error('error getting cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    markAsDeleted(type, id) {
+        return new Promise((resolve, reject) => {
+            var tableName = '';
+
+            switch (type) {
+                case CORONA_INFO_TYPE.CONFIRMED:
+                    tableName = CONFIRMED_TABLE;
+                    break;
+                case CORONA_INFO_TYPE.DEATH:
+                    tableName = DEATHS_TABLE;
+                    break;
+                case CORONA_INFO_TYPE.RECOVERED:
                     tableName = RECOVERED_TABLE;
                     break;
                 default:
@@ -186,24 +260,29 @@ module.exports = {
             var params = {
                 TableName: tableName,
                 Key: {
-                    id: id
+                    'id': id
                 },
-                ProjectionExpression: '#id',
+                UpdateExpression: 'set #isremoved = :isremoved',
                 ExpressionAttributeNames: {
-                    '#id': 'id'
-                }
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':isremoved': true
+                },
+                ReturnValues: 'UPDATED_OLD'
             };
-            dynamoDb.get(params, function(err, data) {
+
+            dynamoDb.update(params, function (err, data) {
                 if (err) {
-                    console.log(`Error getting case ${id} by type ${type}`);
+                    console.log('Error while updating confirmed');
                     console.log(err);
                     reject(err);
                 } else {
-                    if (data.Item) {
-                        resolve(true);
-                    } else {
-                        resolve(false);
+                    var status = 0;
+                    if (data.Attributes && data.Attributes.isremoved == false) {
+                        status = 1;
                     }
+                    resolve({status: status, message: 'success'});
                 }
             });
         });
