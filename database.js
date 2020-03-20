@@ -294,16 +294,18 @@ module.exports = {
                 Key: {
                     id: coronaCase.id
                 },
-                UpdateExpression: 'set #hcd = :hcd, #is = :is, #isc = :isc',
+                UpdateExpression: 'set #hcd = :hcd, #is = :is, #isc = :isc, #isremoved = :isremoved',
                 ExpressionAttributeNames: {
                     '#hcd': 'healthCareDistrict',
                     '#is': 'infectionSource',
-                    '#isc': 'infectionSourceCountry'
+                    '#isc': 'infectionSourceCountry',
+                    '#isremoved': 'isremoved'
                 },
                 ExpressionAttributeValues: {
                     ':hcd': coronaCase.healthCareDistrict,
                     ':is': coronaCase.infectionSource,
-                    ':isc': coronaCase.infectionSourceCountry
+                    ':isc': coronaCase.infectionSourceCountry,
+                    ':isremoved': false
                 },
                 ReturnValues: 'UPDATED_OLD'
             };
@@ -315,7 +317,7 @@ module.exports = {
                     reject(err);
                 } else {
                     var status = 0;
-                    if (data.Attributes && (data.Attributes.healthCareDistrict != coronaCase.healthCareDistrict || data.Attributes.infectionSource != coronaCase.infectionSource || data.Attributes.infectionSourceCountry != coronaCase.infectionSourceCountry)) {
+                    if (data.Attributes && (data.Attributes.healthCareDistrict != coronaCase.healthCareDistrict || data.Attributes.infectionSource != coronaCase.infectionSource || data.Attributes.infectionSourceCountry != coronaCase.infectionSourceCountry || data.Attributes.isremoved != false)) {
                         status = 1;
                     }
                     resolve({status: status, message: 'success'});
@@ -330,12 +332,14 @@ module.exports = {
                 Key: {
                     id: coronaCase.id
                 },
-                UpdateExpression: 'set #hcd = :hcd',
+                UpdateExpression: 'set #hcd = :hcd, #isremoved = :isremoved',
                 ExpressionAttributeNames: {
-                    '#hcd': 'healthCareDistrict'
+                    '#hcd': 'healthCareDistrict',
+                    '#isremoved': 'isremoved'
                 },
                 ExpressionAttributeValues: {
-                    ':hcd': coronaCase.healthCareDistrict
+                    ':hcd': coronaCase.healthCareDistrict,
+                    ':isremoved': false
                 },
                 ReturnValues: 'UPDATED_OLD'
             };
@@ -347,7 +351,7 @@ module.exports = {
                     reject(err);
                 } else {
                     var status = 0;
-                    if (data.Attributes && data.Attributes.healthCareDistrict != coronaCase.healthCareDistrict ) {
+                    if (data.Attributes && (data.Attributes.healthCareDistrict != coronaCase.healthCareDistrict || data.Attributes.isremoved != false)) {
                         status = 1;
                     }
                     resolve({status: status, message: 'success'});
