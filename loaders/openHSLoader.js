@@ -34,7 +34,7 @@ module.exports = {
                     results.confirmed.push({
                         id: parseInt(confirmedCase.id),
                         acqDate: confirmedCase.date,
-                        healthCareDistrict: confirmedCase.healthCareDistrict,
+                        healthCareDistrict: confirmedCase.healthCareDistrict || null,
                         infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
                         infectionSource: confirmedCase.infectionSource,
                         insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
