@@ -361,7 +361,36 @@ module.exports = {
     },
     updateDeadCase(coronaCase) {
         return new Promise((resolve, reject) => {
-            resolve({status: 0, message: 'success'});
+            var params = {
+                TableName: DEATHS_TABLE,
+                Key: {
+                    id: coronaCase.id
+                },
+                UpdateExpression: 'set #hcd = :hcd, #isremoved = :isremoved',
+                ExpressionAttributeNames: {
+                    '#hcd': 'healthCareDistrict',
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':hcd': coronaCase.healthCareDistrict,
+                    ':isremoved': false
+                },
+                ReturnValues: 'UPDATED_OLD'
+            };
+
+            dynamoDb.update(params, function (err, data) {
+                if (err) {
+                    console.log('Error while updating deaths');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    var status = 0;
+                    if (data.Attributes && (data.Attributes.healthCareDistrict != coronaCase.healthCareDistrict || data.Attributes.isremoved != false)) {
+                        status = 1;
+                    }
+                    resolve({status: status, message: 'success'});
+                }
+            });
         });
     },
     updateOperation(operation) {
