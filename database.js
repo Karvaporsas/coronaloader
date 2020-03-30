@@ -4,6 +4,7 @@
 
 const AWS = require('aws-sdk');
 const _ = require('underscore');
+const moment = require('moment');
 const utils = require('./utils');
 const OPERATIONS_TABLE = process.env.TABLE_OPERATIONS;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
@@ -11,6 +12,7 @@ const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const CONFIRMED_TABLE = process.env.CONFIRMED_TABLE;
 const DEATHS_TABLE = process.env.DEATHS_TABLE;
 const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
+const CHARTS_TABLE = process.env.CHARTS_TABLE;
 const CORONA_INFO_TYPE = {
     'DEATH': 'DEATH',
     'RECOVERED': 'RECOVERED',
@@ -395,7 +397,6 @@ module.exports = {
     },
     updateOperation(operation) {
         return new Promise((resolve, reject) => {
-            console.log('Updating operation');
             var d = new Date();
             var params = {
                 TableName: OPERATIONS_TABLE,
@@ -463,6 +464,63 @@ module.exports = {
                 console.log('Error getting operations');
                 console.log(e);
                 reject(e);
+            });
+        });
+    },
+    getConfirmedCases() {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: CONFIRMED_TABLE,
+                FilterExpression: '#isremoved <> :isremoved',
+                ExpressionAttributeNames: {
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':isremoved': true
+                }
+            };
+
+            utils.performScan(dynamoDb, params).then((confirmedCases) => {
+                for (const cc of confirmedCases) {
+                    var d = moment(cc.acqDate);
+                    cc.day = d.format('YYYY-MM-DD');
+                    cc.date = d;
+                }
+                resolve(confirmedCases);
+            }).catch((e) => {
+                console.log('Error getting confirmed cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    updateChartLink(link) {
+        return new Promise((resolve, reject) => {
+            var dateString = moment().format('YYYY-MM-DD HH:mm:ss');
+            var params = {
+                TableName: CHARTS_TABLE,
+                Key: {
+                    chartName: link.chartName
+                },
+                UpdateExpression: 'set #updated = :updated, #url = :url',
+                ExpressionAttributeNames: {
+                    '#updated': 'updated',
+                    '#url': 'url'
+                },
+                ExpressionAttributeValues: {
+                    ':updated': dateString,
+                    ':url': link.url
+                }
+            };
+
+            dynamoDb.update(params, function(err, data) {
+                if (err) {
+                    console.log('Error updating chartlink');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve({status: 1, message: 'success', link: link});
+                }
             });
         });
     }
