@@ -154,7 +154,7 @@ module.exports = {
 
                     return Promise.all(promises);
                 }).then(() => {
-                    resolve({status: 1, message: `${updatedCases.length} cases updated`});
+                    resolve({status: 1, message: `${updatedCases.length} cases updated`, amount: updatedCases.length});
                 }).catch((e) => {
                     console.log('error getting initial results on updateCases');
                     console.log(e);

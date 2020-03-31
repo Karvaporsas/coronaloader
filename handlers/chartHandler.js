@@ -90,7 +90,7 @@ function _createChart(chartName, data) {
     var avgs = _.map(daySlots, function (slot) { return slot.avgValue; });
 
     var body = {
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         width: 800,
         height: 600,
         format: 'png',
