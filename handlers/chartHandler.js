@@ -6,12 +6,14 @@ const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 const _ = require('underscore');
 const moment = require('moment');
-const Fs = require('fs');
+const fs = require('fs');
 const Axios = require('axios');
 const database = require('./../database');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const CHART_LINK_DAILY_NEW = process.env.CHART_LINK_DAILY_NEW;
 const DAY_PERIOD = 30;
+const DATASOURCE_FOR_CHARTS = process.env.DATASOURCE_FOR_CHARTS || 'DB';
+const CASE_BUCKET = process.env.CASE_BUCKET;
 
 function _loadChartToS3(chartName, body) {
     return new Promise((resolve, reject) => {
@@ -19,7 +21,7 @@ function _loadChartToS3(chartName, body) {
         const k = `${dateString}${chartName}.png`;
         const url = "https://quickchart.io/chart";
         const path = `/tmp/${k}`;
-        const writer = Fs.createWriteStream(path);
+        const writer = fs.createWriteStream(path);
 
         Axios({
             url,
@@ -41,9 +43,9 @@ function _loadChartToS3(chartName, body) {
         });
         writer.on('finish', function () {
             var imgStorageParams = {
-                Bucket: 'toffel-lambda-charts',
+                Bucket: CASE_BUCKET,
                 Key: k,
-                Body: Fs.createReadStream(path),
+                Body: fs.createReadStream(path),
                 ContentType: 'image/png'
             };
 
@@ -70,7 +72,8 @@ function _createChart(chartName, data) {
 
     var daySlots = [];
     var avgLineValues = [0, 0, 0, 0, 0];
-    for (let i = 0; i <= DAY_PERIOD; i++) {
+    var daysToDraw = DATASOURCE_FOR_CHARTS == 'S3' ? DAY_PERIOD -1 : DAY_PERIOD;
+    for (let i = 0; i <= daysToDraw; i++) {
         var dm = moment().subtract(DAY_PERIOD - i, 'days');
         var keyString = dm.format('YYYY-MM-DD');
         var casesByDate = casesByDateGroup[keyString];
@@ -126,7 +129,7 @@ module.exports = {
             console.log('starting to create charts');
         }
         return new Promise((resolve, reject) => {
-            database.getConfirmedCases().then((confirmedCases) => {
+            database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
                 return _createChart(CHART_LINK_DAILY_NEW, confirmedCases);
             }).then((chartLink) => {
                 return database.updateChartLink(chartLink);

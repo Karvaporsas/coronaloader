@@ -3,8 +3,10 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const s3 = new AWS.S3();
 const _ = require('underscore');
 const moment = require('moment');
+const fs = require('fs');
 const utils = require('./utils');
 const OPERATIONS_TABLE = process.env.TABLE_OPERATIONS;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
@@ -13,6 +15,8 @@ const CONFIRMED_TABLE = process.env.CONFIRMED_TABLE;
 const DEATHS_TABLE = process.env.DEATHS_TABLE;
 const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
 const CHARTS_TABLE = process.env.CHARTS_TABLE;
+const THL_CASES_LINK = process.env.THL_CASES_LINK;
+const CASE_BUCKET = process.env.CASE_BUCKET;
 const CORONA_INFO_TYPE = {
     'DEATH': 'DEATH',
     'RECOVERED': 'RECOVERED',
@@ -467,7 +471,70 @@ module.exports = {
             });
         });
     },
-    getConfirmedCases() {
+    getConfirmedCases(dataSource) {
+        switch (dataSource) {
+            case 'S3':
+                return this.getConfirmedCasesFromS3();
+            case 'DB':
+            default:
+                return this.getConfirmedCasesFromDB();
+        }
+
+    },
+    getConfirmedCasesFromS3() {
+        return new Promise((resolve, reject) => {
+            this.getChartLink(dynamoDb, THL_CASES_LINK).then((chartLink) => {
+                const inputFilename = '/tmp/' + chartLink.url;
+                const writeStream = fs.createWriteStream(inputFilename);
+                const hcdNames = utils.getHCDNames();
+                s3.getObject({
+                    Bucket: CASE_BUCKET,
+                    Key: chartLink.url
+                }).createReadStream().pipe(writeStream);
+                writeStream.on('finish', function() {
+                    fs.readFile(inputFilename, 'utf8', function(err, data) {
+                        if (err) {
+                            console.log('Error reading case file');
+                            console.log(err);
+                            reject(err);
+                        } else {
+                            var parsedData = JSON.parse(data);
+                            var results = [];
+                            for (const hcd of hcdNames) {
+                                var casesFromDistrict = parsedData[hcd];
+                                for (const dayOfHCD of casesFromDistrict) {
+                                    for (let index = 0; index < dayOfHCD.value; index++) {
+                                        var md = moment(dayOfHCD.date);
+                                        var mdZoneAdjusted = moment(dayOfHCD.date).subtract(3, 'hours');
+                                        results.push({
+                                            acqDate: md,
+                                            day: md.format('YYYY-MM-DD'),
+                                            date: mdZoneAdjusted,
+                                            healthCareDistrict: dayOfHCD.healthCareDistrict,
+                                            insertDate: md
+                                        });
+                                    }
+                                }
+                            }
+
+                            resolve(results);
+                        }
+
+                    });
+                });
+                writeStream.on('error', function (err) {
+                    console.log('Error getting image from S3');
+                    console.log(err);
+                    reject(err);
+                });
+            }).catch((e) => {
+                console.log('Error getting chart link');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    getConfirmedCasesFromDB() {
         return new Promise((resolve, reject) => {
             var params = {
                 TableName: CONFIRMED_TABLE,
@@ -523,5 +590,31 @@ module.exports = {
                 }
             });
         });
-    }
+    },
+    getChartLink(dynamoDb, chartName){
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: CHARTS_TABLE,
+                Key: {
+                    chartName: chartName
+                },
+                ProjectionExpression: '#chartName, #updated, #url, #used',
+                ExpressionAttributeNames: {
+                    '#chartName': 'chartName',
+                    '#updated': 'updated',
+                    '#url': 'url',
+                    '#used': 'used'
+                }
+            };
+            dynamoDb.get(params, function (err, data) {
+                if (err || !data) {
+                    console.log('Error getting link');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve(data.Item);
+                }
+            });
+        });
+    },
 };

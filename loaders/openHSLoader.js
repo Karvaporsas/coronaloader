@@ -58,7 +58,7 @@ module.exports = {
                 }
 
                 database.updateOperation(operation).then(() => {
-                    resolve({status: 1, cases: results, message: 'All done'});
+                    resolve({status: 1, cases: results, type: operation.type, message: 'All done'});
                 }).catch((e) => {
                     reject(e);
                 });

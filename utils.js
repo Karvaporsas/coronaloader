@@ -52,5 +52,30 @@ module.exports = {
         var hash = crypto.createHash('sha1');
         hash.update(source);
         return hash.digest('hex');
+    },
+    getHCDNames() {
+        return [
+            'Ahvenanmaa',
+            'Varsinais-Suomi',
+            'Satakunta',
+            'Kanta-Häme',
+            'Pirkanmaa',
+            'Päijät-Häme',
+            'Kymenlaakso',
+            'Etelä-Karjala',
+            'Etelä-Savo',
+            'Itä-Savo',
+            'Pohjois-Karjala',
+            'Pohjois-Savo',
+            'Keski-Suomi',
+            'Etelä-Pohjanmaa',
+            'Vaasa',
+            'Keski-Pohjanmaa',
+            'Pohjois-Pohjanmaa',
+            'Kainuu',
+            'Länsi-Pohja',
+            'Lappi',
+            'HUS'
+        ];
     }
 };
