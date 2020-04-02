@@ -72,15 +72,18 @@ function _createChart(chartName, data) {
 
     var daySlots = [];
     var avgLineValues = [0, 0, 0, 0, 0];
-    var daysToDraw = DATASOURCE_FOR_CHARTS == 'S3' ? DAY_PERIOD -1 : DAY_PERIOD;
+    //var daysToDraw = DATASOURCE_FOR_CHARTS == 'S3' ? DAY_PERIOD -1 : DAY_PERIOD;
+    var daysToDraw = DAY_PERIOD -1; // not today
     for (let i = 0; i <= daysToDraw; i++) {
-        var dm = moment().subtract(DAY_PERIOD - i, 'days');
-        var keyString = dm.format('YYYY-MM-DD');
-        var casesByDate = casesByDateGroup[keyString];
-        var cases = casesByDate ? casesByDate.length : 0;
+        const dm = moment().subtract(DAY_PERIOD - i, 'days');
+        const keyString = dm.format('YYYY-MM-DD');
+        var cases = casesByDateGroup[keyString] ? casesByDateGroup[keyString].length : 0;
+
         avgLineValues[i % (avgLineValues.length)] = cases;
+
         var divider = i < (avgLineValues.length -1) ? (i + 1) : avgLineValues.length;
         var avgValue = _.reduce(avgLineValues, function (mem, a) { return mem + a; }, 0) / divider;
+
         daySlots.push({
             day: keyString,
             dateString: dm.format('D.M.'),
