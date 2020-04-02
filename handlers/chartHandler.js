@@ -94,8 +94,8 @@ function _createChart(chartName, data) {
 
     var body = {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        width: 800,
-        height: 600,
+        width: 1200,
+        height: 900,
         format: 'png',
         chart: {
             type: 'line',

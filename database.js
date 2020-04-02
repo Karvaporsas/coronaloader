@@ -507,7 +507,6 @@ module.exports = {
                                         var md = moment(dayOfHCD.date);
                                         var mdZoneAdjusted = moment(dayOfHCD.date).subtract(3, 'hours');
                                         results.push({
-                                            acqDate: md,
                                             day: md.format('YYYY-MM-DD'),
                                             date: mdZoneAdjusted,
                                             healthCareDistrict: dayOfHCD.healthCareDistrict,
@@ -549,7 +548,7 @@ module.exports = {
 
             utils.performScan(dynamoDb, params).then((confirmedCases) => {
                 for (const cc of confirmedCases) {
-                    var d = moment(cc.acqDate);
+                    var d = moment(cc.date);
                     cc.day = d.format('YYYY-MM-DD');
                     cc.date = d;
                 }

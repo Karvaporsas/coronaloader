@@ -13,7 +13,7 @@ module.exports = {
 
         var options = {
             method: 'GET',
-            url: `https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishCoronaData`
+            url: `https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishCoronaData/v2`
         };
 
         rp(options, (error, response, body) => {
@@ -32,27 +32,30 @@ module.exports = {
 
                 for (const confirmedCase of body.confirmed) {
                     results.confirmed.push({
-                        id: parseInt(confirmedCase.id),
-                        acqDate: confirmedCase.date,
+                        id: confirmedCase.id,
+                        date: confirmedCase.date,
                         healthCareDistrict: confirmedCase.healthCareDistrict || null,
                         infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
                         infectionSource: confirmedCase.infectionSource,
+                        isremoved: false,
                         insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
                     });
                 }
                 for (const death of body.deaths) {
                     results.deaths.push({
-                        id: parseInt(death.id),
+                        id: death.id,
                         date: death.date,
                         healthCareDistrict: death.healthCareDistrict,
+                        isremoved: false,
                         insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
                     });
                 }
                 for (const curedCase of body.recovered) {
                     results.recovered.push({
-                        id: parseInt(curedCase.id),
+                        id: curedCase.id,
                         date: curedCase.date,
                         healthCareDistrict: curedCase.healthCareDistrict,
+                        isremoved: false,
                         insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
                     });
                 }
