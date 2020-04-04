@@ -18,8 +18,9 @@ module.exports = {
         return new Promise((resolve, reject) => {
             function chatScan(err, data) {
                 if (err) {
-                    console.log("error while scanning");
+                    console.log(`Error while scanning table ${params.tableName}`);
                     console.log(err);
+                    console.log(params);
                     reject(err);
                     return;
                 } else if (!data) {

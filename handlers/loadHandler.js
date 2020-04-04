@@ -28,6 +28,7 @@ function _load(operation) {
 function _storeResults(results, isUpdate) {
     switch (results.type) {
         case 'HSOpen':
+            console.log('storing');
             return storeHandler.storeHSOpen(results.cases, isUpdate);
         case 'THL':
             return storeHandler.storeTHL(results.cases);
@@ -52,6 +53,7 @@ module.exports = {
 
                         if (insertResult.amount) {
                             finalPromises.push(chartHandler.createCharts());
+                            finalPromises.push(chartHandler.createHospitalizationCharts());
                         } else {
                             finalPromises.push(new Promise((innerResolve, innerReject) => {
                                 innerResolve();

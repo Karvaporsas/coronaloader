@@ -1,8 +1,8 @@
 /*jslint node: true */
 /*jshint esversion: 6 */
 'use strict';
-const rp = require('request-promise');
 const database = require('../database');
+const Axios = require('axios');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 
 module.exports = {
@@ -11,61 +11,67 @@ module.exports = {
             console.log(operation);
         }
 
-        var options = {
+        const dataOptions = {
             method: 'GET',
             url: `https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishCoronaData/v2`
         };
+        const hospitalizationOptions = {
+            method: 'GET',
+            url: `https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishCoronaHospitalData`
+        };
 
-        rp(options, (error, response, body) => {
-            if (error) {
-                console.log('Error getting quotes');
-                console.log(error);
-                reject(error);
-            } else {
-                var results = {
-                    confirmed: [],
-                    deaths: [],
-                    recovered: []
-                };
+        var results = {
+            confirmed: [],
+            deaths: [],
+            recovered: [],
+            hospitalizations: []
+        };
+        var currentDate = new Date();
+        var currentDateString = currentDate.toLocaleDateString() + ' ' + currentDate.toLocaleTimeString();
+        Axios(dataOptions).then((result) => {
+            var data = result.data;
 
-                body = JSON.parse(body);
-
-                for (const confirmedCase of body.confirmed) {
-                    results.confirmed.push({
-                        id: confirmedCase.id,
-                        date: confirmedCase.date,
-                        healthCareDistrict: confirmedCase.healthCareDistrict || null,
-                        infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
-                        infectionSource: confirmedCase.infectionSource,
-                        isremoved: false,
-                        insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
-                    });
-                }
-                for (const death of body.deaths) {
-                    results.deaths.push({
-                        id: death.id,
-                        date: death.date,
-                        healthCareDistrict: death.healthCareDistrict,
-                        isremoved: false,
-                        insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
-                    });
-                }
-                for (const curedCase of body.recovered) {
-                    results.recovered.push({
-                        id: curedCase.id,
-                        date: curedCase.date,
-                        healthCareDistrict: curedCase.healthCareDistrict,
-                        isremoved: false,
-                        insertDate: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
-                    });
-                }
-
-                database.updateOperation(operation).then(() => {
-                    resolve({status: 1, cases: results, type: operation.type, message: 'All done'});
-                }).catch((e) => {
-                    reject(e);
+            for (const confirmedCase of data.confirmed) {
+                results.confirmed.push({
+                    id: confirmedCase.id,
+                    date: confirmedCase.date,
+                    healthCareDistrict: confirmedCase.healthCareDistrict || null,
+                    infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
+                    infectionSource: confirmedCase.infectionSource,
+                    isremoved: false,
+                    insertDate: currentDateString
                 });
             }
+            for (const death of data.deaths) {
+                results.deaths.push({
+                    id: death.id,
+                    date: death.date,
+                    healthCareDistrict: death.healthCareDistrict,
+                    isremoved: false,
+                    insertDate: currentDateString
+                });
+            }
+            for (const curedCase of data.recovered) {
+                results.recovered.push({
+                    id: curedCase.id,
+                    date: curedCase.date,
+                    healthCareDistrict: curedCase.healthCareDistrict,
+                    isremoved: false,
+                    insertDate: currentDateString
+                });
+            }
+
+            return Axios(hospitalizationOptions);
+        }).then((hospitalizationData) => {
+            for (const hospitalization of hospitalizationData.data.hospitalised) { //sic
+                hospitalization.insertDate = currentDateString;
+                hospitalization.isremoved = false;
+                results.hospitalizations.push(hospitalization);
+            }
+            console.log('going tuo update data');
+            return database.updateOperation(operation);
+        }).then(() => {
+            resolve({status: 1, cases: results, type: operation.type, message: 'All done'});
         }).catch(e => {
             console.log('Error getting cases');
             console.log(e);

@@ -11,9 +11,11 @@ const Axios = require('axios');
 const database = require('./../database');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const CHART_LINK_DAILY_NEW = process.env.CHART_LINK_DAILY_NEW;
+const CHART_LINK_HOSPITALIZATIONS = process.env.CHART_LINK_HOSPITALIZATIONS;
 const DAY_PERIOD = 30;
 const DATASOURCE_FOR_CHARTS = process.env.DATASOURCE_FOR_CHARTS || 'DB';
 const CASE_BUCKET = process.env.CASE_BUCKET;
+const REPORTING_AREA = 'Finland';
 
 function _loadChartToS3(chartName, body) {
     return new Promise((resolve, reject) => {
@@ -142,6 +144,89 @@ module.exports = {
                 reject(e);
             });
         });
+    },
+    createHospitalizationCharts() {
+        return new Promise((resolve, reject) => {
+            database.getHospitalizations().then((hospitalizations) => {
+                const m = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0);
+                var casesByDateGroup = _.chain(hospitalizations)
+                    .filter(function (c) { return c.date.isAfter(m) && c.area == REPORTING_AREA; })
+                    .groupBy(function (c) { return c.day; })
+                    .value();
 
+                var daySlots = [];
+                var daysToDraw = DAY_PERIOD -1; // not today
+                for (let i = 0; i <= daysToDraw; i++) {
+                    const dm = moment().subtract(DAY_PERIOD - i, 'days');
+                    const keyString = dm.format('YYYY-MM-DD');
+                    const dateGroup = casesByDateGroup[keyString];
+                    var inHospital = 0;
+                    var inICU = 0;
+                    var deaths = 0;
+
+                    if (dateGroup) {
+                        inHospital = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.totalHospitalised; }, 0);
+                        inICU = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.inIcu; }, 0);
+                        deaths = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.dead; }, 0);
+                    }
+
+                    daySlots.push({
+                        day: keyString,
+                        dateString: dm.format('D.M.'),
+                        inHospital: inHospital,
+                        inICU: inICU,
+                        deaths: deaths
+                    });
+                }
+                var labels = _.map(daySlots, function (slot) { return slot.dateString; });
+                var hospitalValues = _.map(daySlots, function (slot) { return slot.inHospital; });
+                var icuValues = _.map(daySlots, function (slot) { return slot.inICU; });
+                var deadValues = _.map(daySlots, function (slot) { return slot.deaths; });
+                console.log(hospitalValues);
+                console.log(icuValues);
+                console.log(deadValues);
+
+                var body = {
+                    backgroundColor: 'transparent',
+                    width: 1200,
+                    height: 900,
+                    format: 'png',
+                    chart: {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                    label: 'Sairaalahoidossa',
+                                    data: hospitalValues,
+                                    fill: false,
+                                    borderColor: 'rgba(252, 186, 3, 1)',
+                                    pointRadius: 0.1
+                                },{
+                                    label: 'Tehohoidossa',
+                                    data: icuValues,
+                                    fill: false,
+                                    borderColor: 'rgba(252, 20, 3, 1)',
+                                    pointRadius: 0.1
+                                },{
+                                    label: 'Kuolleet',
+                                    data: deadValues,
+                                    fill: false,
+                                    borderColor: 'rgba(0, 0, 0, 1)',
+                                    pointRadius: 0.1
+                                }
+                            ]
+                        }
+                    }
+                };
+
+                return _loadChartToS3(CHART_LINK_HOSPITALIZATIONS, body);
+            }).then((chartLink) => {
+                return database.updateChartLink(chartLink);
+            }).then((status) => {
+                resolve({status: 0, message: 'Stuff was done', link: status.link});
+            }).catch((e) => {
+                reject(e);
+            });
+        });
     }
 };

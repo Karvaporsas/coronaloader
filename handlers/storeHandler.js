@@ -20,6 +20,7 @@ module.exports = {
             });
         }
         if (isUpdate) {
+            console.log('updating');
             return database.updateCases(cases);
         } else {
             return database.insertCases(cases);

@@ -15,6 +15,8 @@ module.exports = {
                 return loadHandler.autoLoad(true);
             case 'createcharts':
                 return chartHandler.createCharts();
+            case 'createhospitalization':
+                return chartHandler.createHospitalizationCharts();
             default:
                 return new Promise((resolve, reject) => {
                     reject('Unknown comand');

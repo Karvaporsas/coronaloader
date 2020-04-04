@@ -17,10 +17,15 @@ const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
 const CHARTS_TABLE = process.env.CHARTS_TABLE;
 const THL_CASES_LINK = process.env.THL_CASES_LINK;
 const CASE_BUCKET = process.env.CASE_BUCKET;
+const UPDATE_TRESHOLD_DAYS = 8;
+const HOSPITALIZED_TABLE = process.env.HOSPITALIZED_TABLE;
+const DATE_SORT_STRING_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+const SORT_STRING_COL_NAME = 'dateSortString';
 const CORONA_INFO_TYPE = {
     'DEATH': 'DEATH',
     'RECOVERED': 'RECOVERED',
-    'CONFIRMED': 'CONFIRMED'
+    'CONFIRMED': 'CONFIRMED',
+    'HOSPITALIZATION': 'HOSPITALIZATION'
 };
 const OPERATION_TYPE = {
     'INSERT': 'INSERT',
@@ -30,6 +35,9 @@ const OPERATION_TYPE = {
 
 function _getOperationType(list, id) {
     return _.chain(list)
+        .filter(function (c) {
+            return !c.isremoved;
+        })
         .map(function (c) {
             return c.id;
         })
@@ -37,8 +45,13 @@ function _getOperationType(list, id) {
         .value() ? OPERATION_TYPE.UPDATE : OPERATION_TYPE.INSERT;
 }
 
+function _filterByTreshold(arr) {
+    var tresholdString = moment().subtract(UPDATE_TRESHOLD_DAYS, 'days').format(DATE_SORT_STRING_FORMAT);
+    return _.filter(arr, function (item) { return item[SORT_STRING_COL_NAME] > tresholdString; });
+}
+
 function _getDifference(oldCases, inputCases) {
-    var oldMap = _.map(oldCases, function(c) {return c.id; });
+    var oldMap = _.chain(oldCases).filter(function (c) { return !c.isremoved; }).map(function(c) {return c.id; }).value();
     var inputMap = _.map(inputCases, function (c) { return c.id; });
 
     return _.difference(oldMap, inputMap);
@@ -108,6 +121,11 @@ module.exports = {
                 for (const coronaCase of cases.recovered) {
                     promises.push(_insertCasePromise(CORONA_INFO_TYPE.RECOVERED, coronaCase, this, insertedCases));
                 }
+                for (const hospitalization of cases.hospitalizations) {
+                    promises.push(this.insertHospitalization(hospitalization).then((res) => {
+                        if (res) this.insertCases.push(res);
+                    }));
+                }
 
                 Promise.all(promises).then(() => {
                     resolve({status: 1, message: `${insertedCases.length} cases inserted`});
@@ -121,8 +139,9 @@ module.exports = {
     },
     updateCases(cases) {
         return new Promise((resolve, reject) => {
+            console.log('start to update. Shot');
             var updatedCases = [];
-
+            var m = moment();
             if (!cases) {
                 if (DEBUG_MODE) {
                     console.log('Nothing to update!');
@@ -131,33 +150,48 @@ module.exports = {
             } else {
                 var initialPromises = [];
 
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, UPDATE_TRESHOLD_DAYS));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, UPDATE_TRESHOLD_DAYS));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, UPDATE_TRESHOLD_DAYS));
+                /*initialPromises.push(this.resetRemovedFromTable(CONFIRMED_TABLE));
+                initialPromises.push(this.resetRemovedFromTable(DEATHS_TABLE));
+                initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));*/
 
                 Promise.all(initialPromises).then((allInitialResults) => {
+                    console.log('Initial promises got in ' + moment().diff(m) + ' milliseconds');
                     var promises = [];
-                    for (const toDelete of _getDifference(allInitialResults[0], cases.confirmed)) {
+                    var tresholdFilteredConfirmed = _filterByTreshold(allInitialResults[0]);
+                    var tresholdFilteredDeaths = _filterByTreshold(allInitialResults[1]);
+                    var tresholdFilteredRecovered = _filterByTreshold(allInitialResults[2]);
+                    for (const toDelete of _getDifference(tresholdFilteredConfirmed, cases.confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
                     }
-                    for (const toDelete of _getDifference(allInitialResults[1], cases.deaths)) {
+                    for (const toDelete of _getDifference(tresholdFilteredDeaths, cases.deaths)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.DEATH, toDelete));
                     }
-                    for (const toDelete of _getDifference(allInitialResults[2], cases.recovered)) {
+                    for (const toDelete of _getDifference(tresholdFilteredRecovered, cases.recovered)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.RECOVERED, toDelete));
                     }
+                    console.log('Old deletions handled in ' + moment().diff(m) + ' milliseconds');
                     for (const coronaCase of cases.confirmed) {
-                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[0], coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
+                        promises.push(_updateCasePromise(_getOperationType(tresholdFilteredConfirmed, coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
                     }
                     for (const coronaCase of cases.deaths) {
-                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[1], coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
+                        promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
                     }
                     for (const coronaCase of cases.recovered) {
-                        promises.push(_updateCasePromise(_getOperationType(allInitialResults[2], coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
+                        promises.push(_updateCasePromise(_getOperationType(tresholdFilteredRecovered, coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
                     }
-
+                    console.log('Update promises handled in ' + moment().diff(m) + ' milliseconds');
+                    for (const hospitalization of cases.hospitalizations) {
+                        promises.push(this.insertHospitalization(hospitalization).then((res) => { //jshint ignore:line
+                            if (res) updatedCases.push(res);
+                        }));
+                    }
+                    console.log('Hospitalizations handled in ' + moment().diff(m) + ' milliseconds');
                     return Promise.all(promises);
                 }).then(() => {
+                    console.log('All handled in ' + moment().diff(m) + ' milliseconds');
                     resolve({status: 1, message: `${updatedCases.length} cases updated`, amount: updatedCases.length});
                 }).catch((e) => {
                     console.log('error getting initial results on updateCases');
@@ -185,6 +219,8 @@ module.exports = {
                     break;
             }
 
+            coronaCase[SORT_STRING_COL_NAME] = moment(coronaCase.date).format(DATE_SORT_STRING_FORMAT);
+
             const params = {
                 TableName: tableName,
                 Item: coronaCase,
@@ -204,7 +240,60 @@ module.exports = {
             });
         });
     },
-    getCaseInfos(type) {
+    insertHospitalization(hospitalization) {
+        return new Promise((resolve, reject) => {
+            hospitalization[SORT_STRING_COL_NAME] = moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
+            var params = {
+                TableName: HOSPITALIZED_TABLE,
+                Item: hospitalization,
+                ConditionExpression: 'attribute_not_exists(area) AND attribute_not_exists(#date)',
+                ExpressionAttributeNames: {
+                    '#date': 'date'
+                }
+            };
+
+            dynamoDb.put(params, function (err) {
+                if (err&& err.code !== 'ConditionalCheckFailedException') {
+                    console.log('Error inserting hospitalization');
+                    console.log(err);
+                    reject(err);
+                } else if (err && err.code === 'ConditionalCheckFailedException') {
+                    resolve();
+                } else {
+                    resolve(hospitalization);
+                }
+            });
+        });
+    },
+    getHospitalizations() {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: HOSPITALIZED_TABLE,
+                FilterExpression: '#isremoved <> :isremoved',
+                ExpressionAttributeNames: {
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':isremoved': true
+                }
+            };
+
+            utils.performScan(dynamoDb, params).then((results) => {
+                for (const cc of results) {
+                    var d = moment(cc.date);
+                    cc.day = d.format('YYYY-MM-DD');
+                    cc.date = d;
+                }
+
+                resolve(results);
+            }).catch((e) => {
+                console.log('Error getting hospitalizations');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    getCaseInfos(type, fromSinceDays) {
         return new Promise((resolve, reject) => {
             var tableName = '';
 
@@ -219,15 +308,23 @@ module.exports = {
                     tableName = RECOVERED_TABLE;
                     break;
                 default:
+                    console.log(`type was ${type}`);
                     tableName = '';
                     break;
             }
+            const sinceDateString = moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT);
 
             var params = {
                 TableName: tableName,
-                ProjectionExpression: '#id',
+                ProjectionExpression: '#id, #isremoved',
+                FilterExpression: '#sortString > :sortStringTreshold',
                 ExpressionAttributeNames: {
-                    '#id': 'id'
+                    '#id': 'id',
+                    '#isremoved': 'isremoved',
+                    '#sortString': SORT_STRING_COL_NAME
+                },
+                ExpressionAttributeValues: {
+                    ':sortStringTreshold' : sinceDateString
                 }
             };
 
@@ -616,4 +713,105 @@ module.exports = {
             });
         });
     },
+    /**
+     * Updates each item with result string type array from date
+     *
+     * @param {string} tableName to update
+     * @param {string} sourceCol to get the value from
+     * @param {string} targetCol where to insert value
+     */
+    addDateSortStrings(tableName, sourceCol, targetCol) {
+        return new Promise((resolve, reject) => {
+            var scanParams = {
+                TableName: tableName
+            };
+
+            utils.performScan(dynamoDb, scanParams).then((items) => {
+                var promises = [];
+                for (const item of items) {
+                    var d = moment(item[sourceCol]);
+                    promises.push(this.updateDateSortStringToItem(tableName, targetCol, d.format(DATE_SORT_STRING_FORMAT), {id: item.id}));
+                }
+                return Promise.all(promises);
+            }).then(() => {
+                resolve();
+            }).catch((e) => {
+                console.log('Error getting confirmed cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    resetRemovedFromTable(tableName) {
+        return new Promise((resolve, reject) => {
+            var scanParams = {
+                TableName: tableName
+            };
+
+            utils.performScan(dynamoDb, scanParams).then((items) => {
+                var promises = [];
+                for (const item of items) {
+
+                    promises.push(this.resetRemovedFromItem(tableName, {id: item.id}));
+                }
+                return Promise.all(promises);
+            }).then(() => {
+                resolve();
+            }).catch((e) => {
+                console.log('Error getting confirmed cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    resetRemovedFromItem(tableName, key) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName,
+                Key: key,
+                UpdateExpression: 'set #isremoved = :isremoved',
+                ExpressionAttributeNames: {
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':isremoved': false
+                }
+            };
+
+            dynamoDb.update(params, function (err, data) {
+                if (err) {
+                    console.log('Error resetting removed');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    },
+    updateDateSortStringToItem(tableName, targetCol, value, key) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName,
+                Key: key,
+                UpdateExpression: 'set #target = :val',
+                ExpressionAttributeNames: {
+                    '#target': targetCol
+                },
+                ExpressionAttributeValues: {
+                    ':val': value
+                }
+            };
+
+            dynamoDb.update(params, function (err, data) {
+                if (err) {
+                    console.log('Error updating date sort string');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    }
 };
