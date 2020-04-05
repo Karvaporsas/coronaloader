@@ -156,6 +156,8 @@ module.exports = {
 
                 var daySlots = [];
                 var daysToDraw = DAY_PERIOD -1; // not today
+                var hasHadValues = false;
+                var maxDeaths = 0;
                 for (let i = 0; i <= daysToDraw; i++) {
                     const dm = moment().subtract(DAY_PERIOD - i, 'days');
                     const keyString = dm.format('YYYY-MM-DD');
@@ -168,7 +170,16 @@ module.exports = {
                         inHospital = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.totalHospitalised; }, 0);
                         inICU = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.inIcu; }, 0);
                         deaths = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.dead; }, 0);
+
+                        if (inHospital || inICU || deaths) {
+                            hasHadValues = true;
+                        }
                     }
+
+                    if (deaths > maxDeaths) maxDeaths = deaths;
+                    if (deaths < maxDeaths) deaths = maxDeaths;
+
+                    if (!hasHadValues) continue;
 
                     daySlots.push({
                         day: keyString,
@@ -182,9 +193,6 @@ module.exports = {
                 var hospitalValues = _.map(daySlots, function (slot) { return slot.inHospital; });
                 var icuValues = _.map(daySlots, function (slot) { return slot.inICU; });
                 var deadValues = _.map(daySlots, function (slot) { return slot.deaths; });
-                console.log(hospitalValues);
-                console.log(icuValues);
-                console.log(deadValues);
 
                 var body = {
                     backgroundColor: 'transparent',
