@@ -149,6 +149,26 @@ module.exports = {
                 resolve({status: 0, message: 'nothing to update'});
             } else {
                 var initialPromises = [];
+                var confirmed = [];
+                var deaths = [];
+                var recovered = [];
+                var inputCasesTreshold = moment().subtract(UPDATE_TRESHOLD_DAYS, 'days');
+
+                for (const cc of cases.confirmed) {
+                    if (moment(cc.date).isAfter(inputCasesTreshold)) {
+                        confirmed.push(cc);
+                    }
+                }
+                for (const cc of cases.deaths) {
+                    if (moment(cc.date).isAfter(inputCasesTreshold)) {
+                        deaths.push(cc);
+                    }
+                }
+                for (const cc of cases.recovered) {
+                    if (moment(cc.date).isAfter(inputCasesTreshold)) {
+                        recovered.push(cc);
+                    }
+                }
 
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, UPDATE_TRESHOLD_DAYS));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, UPDATE_TRESHOLD_DAYS));
@@ -163,23 +183,23 @@ module.exports = {
                     var tresholdFilteredConfirmed = _filterByTreshold(allInitialResults[0]);
                     var tresholdFilteredDeaths = _filterByTreshold(allInitialResults[1]);
                     var tresholdFilteredRecovered = _filterByTreshold(allInitialResults[2]);
-                    for (const toDelete of _getDifference(tresholdFilteredConfirmed, cases.confirmed)) {
+                    for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
                     }
-                    for (const toDelete of _getDifference(tresholdFilteredDeaths, cases.deaths)) {
+                    for (const toDelete of _getDifference(tresholdFilteredDeaths, deaths)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.DEATH, toDelete));
                     }
-                    for (const toDelete of _getDifference(tresholdFilteredRecovered, cases.recovered)) {
+                    for (const toDelete of _getDifference(tresholdFilteredRecovered, recovered)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.RECOVERED, toDelete));
                     }
                     console.log('Old deletions handled in ' + moment().diff(m) + ' milliseconds');
-                    for (const coronaCase of cases.confirmed) {
+                    for (const coronaCase of confirmed) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredConfirmed, coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
                     }
-                    for (const coronaCase of cases.deaths) {
+                    for (const coronaCase of deaths) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
                     }
-                    for (const coronaCase of cases.recovered) {
+                    for (const coronaCase of recovered) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredRecovered, coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
                     }
                     console.log('Update promises handled in ' + moment().diff(m) + ' milliseconds');
