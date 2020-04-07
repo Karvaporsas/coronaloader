@@ -17,7 +17,7 @@ const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
 const CHARTS_TABLE = process.env.CHARTS_TABLE;
 const THL_CASES_LINK = process.env.THL_CASES_LINK;
 const CASE_BUCKET = process.env.CASE_BUCKET;
-const UPDATE_TRESHOLD_DAYS = 8;
+const UPDATE_TRESHOLD_DAYS = process.env.UPDATE_TRESHOLD_DAYS || 8;
 const HOSPITALIZED_TABLE = process.env.HOSPITALIZED_TABLE;
 const DATE_SORT_STRING_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 const SORT_STRING_COL_NAME = 'dateSortString';
@@ -43,11 +43,6 @@ function _getOperationType(list, id) {
         })
         .contains(id)
         .value() ? OPERATION_TYPE.UPDATE : OPERATION_TYPE.INSERT;
-}
-
-function _filterByTreshold(arr) {
-    var tresholdString = moment().subtract(UPDATE_TRESHOLD_DAYS, 'days').format(DATE_SORT_STRING_FORMAT);
-    return _.filter(arr, function (item) { return item[SORT_STRING_COL_NAME] > tresholdString; });
 }
 
 function _getDifference(oldCases, inputCases) {
@@ -180,17 +175,21 @@ module.exports = {
                 Promise.all(initialPromises).then((allInitialResults) => {
                     console.log('Initial promises got in ' + moment().diff(m) + ' milliseconds');
                     var promises = [];
-                    var tresholdFilteredConfirmed = _filterByTreshold(allInitialResults[0]);
-                    var tresholdFilteredDeaths = _filterByTreshold(allInitialResults[1]);
-                    var tresholdFilteredRecovered = _filterByTreshold(allInitialResults[2]);
+                    var tresholdFilteredConfirmed = allInitialResults[0];
+                    var tresholdFilteredDeaths = allInitialResults[1];
+                    var tresholdFilteredRecovered = allInitialResults[2];
+
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
+                        updatedCases.push(toDelete);
                     }
                     for (const toDelete of _getDifference(tresholdFilteredDeaths, deaths)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.DEATH, toDelete));
+                        updatedCases.push(toDelete);
                     }
                     for (const toDelete of _getDifference(tresholdFilteredRecovered, recovered)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.RECOVERED, toDelete));
+                        updatedCases.push(toDelete);
                     }
                     console.log('Old deletions handled in ' + moment().diff(m) + ' milliseconds');
                     for (const coronaCase of confirmed) {
@@ -332,7 +331,6 @@ module.exports = {
                     tableName = '';
                     break;
             }
-            const sinceDateString = moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT);
 
             var params = {
                 TableName: tableName,
@@ -344,7 +342,7 @@ module.exports = {
                     '#sortString': SORT_STRING_COL_NAME
                 },
                 ExpressionAttributeValues: {
-                    ':sortStringTreshold' : sinceDateString
+                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT)
                 }
             };
 
