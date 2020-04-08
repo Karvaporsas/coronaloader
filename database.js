@@ -12,6 +12,7 @@ const OPERATIONS_TABLE = process.env.TABLE_OPERATIONS;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const CONFIRMED_TABLE = process.env.CONFIRMED_TABLE;
+const CONFIRMED_SORT_INDEX = process.env.CONFIRMED_SORT_INDEX || '';
 const DEATHS_TABLE = process.env.DEATHS_TABLE;
 const RECOVERED_TABLE = process.env.RECOVERED_TABLE;
 const CHARTS_TABLE = process.env.CHARTS_TABLE;
@@ -134,7 +135,6 @@ module.exports = {
     },
     updateCases(cases) {
         return new Promise((resolve, reject) => {
-            console.log('start to update. Shot');
             var updatedCases = [];
             var m = moment();
             if (!cases) {
@@ -170,7 +170,8 @@ module.exports = {
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, UPDATE_TRESHOLD_DAYS));
                 /*initialPromises.push(this.resetRemovedFromTable(CONFIRMED_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(DEATHS_TABLE));
-                initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));*/
+                initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));
+                initialPromises.push(this.addDateSortStrings(CONFIRMED_TABLE, '', 'country'));*/
 
                 Promise.all(initialPromises).then((allInitialResults) => {
                     console.log('Initial promises got in ' + moment().diff(m) + ' milliseconds');
@@ -315,10 +316,14 @@ module.exports = {
     getCaseInfos(type, fromSinceDays) {
         return new Promise((resolve, reject) => {
             var tableName = '';
+            var indexName = '';
+            var queryType = 'scan';
 
             switch (type) {
                 case CORONA_INFO_TYPE.CONFIRMED:
                     tableName = CONFIRMED_TABLE;
+                    indexName = CONFIRMED_SORT_INDEX;
+                    queryType = 'query';
                     break;
                 case CORONA_INFO_TYPE.DEATH:
                     tableName = DEATHS_TABLE;
@@ -335,28 +340,52 @@ module.exports = {
             var params = {
                 TableName: tableName,
                 ProjectionExpression: '#id, #isremoved',
-                FilterExpression: '#sortString > :sortStringTreshold',
+                FilterExpression: '#sortString > :sortStringTreshold and #country = :country',
                 ExpressionAttributeNames: {
                     '#id': 'id',
                     '#isremoved': 'isremoved',
+                    '#country': 'country',
                     '#sortString': SORT_STRING_COL_NAME
                 },
                 ExpressionAttributeValues: {
-                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT)
+                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT),
+                    ':country': 'FIN'
                 }
             };
 
-            utils.performScan(dynamoDb, params).then((cases) => {
-                if (!cases || !cases.length) {
-                    resolve([]);
-                } else {
-                    resolve(cases);
-                }
-            }).catch((e) => {
-                console.error('error getting cases');
-                console.log(e);
-                reject(e);
-            });
+            if (indexName) {
+                params.IndexName = indexName;
+                params.KeyConditionExpression = params.FilterExpression;
+                delete params.FilterExpression;
+            }
+
+            switch (queryType) {
+                case 'query':
+                    dynamoDb.query(params, function (err, data) {
+                        if (err) {
+                            console.log(`Error loading ${type}`);
+                            console.log(err);
+                            reject(err);
+                        } else {
+                            resolve(data.Items);
+                        }
+                    });
+                    break;
+                case 'scan':
+                default:
+                    utils.performScan(dynamoDb, params).then((cases) => {
+                        if (!cases || !cases.length) {
+                            resolve([]);
+                        } else {
+                            resolve(cases);
+                        }
+                    }).catch((e) => {
+                        console.error('error getting cases from db');
+                        console.log(e);
+                        reject(e);
+                    });
+                    break;
+            }
         });
     },
     markAsDeleted(type, id) {
@@ -747,8 +776,8 @@ module.exports = {
             utils.performScan(dynamoDb, scanParams).then((items) => {
                 var promises = [];
                 for (const item of items) {
-                    var d = moment(item[sourceCol]);
-                    promises.push(this.updateDateSortStringToItem(tableName, targetCol, d.format(DATE_SORT_STRING_FORMAT), {id: item.id}));
+                    //var d = moment(item[sourceCol]);
+                    promises.push(this.updateDateSortStringToItem(tableName, targetCol, 'FIN', {id: item.id}));
                 }
                 return Promise.all(promises);
             }).then(() => {

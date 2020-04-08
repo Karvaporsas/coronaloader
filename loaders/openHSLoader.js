@@ -39,7 +39,8 @@ module.exports = {
                     infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
                     infectionSource: confirmedCase.infectionSource,
                     isremoved: false,
-                    insertDate: currentDateString
+                    insertDate: currentDateString,
+                    country: 'FIN'
                 });
             }
             for (const death of data.deaths) {
@@ -48,7 +49,8 @@ module.exports = {
                     date: death.date,
                     healthCareDistrict: death.healthCareDistrict,
                     isremoved: false,
-                    insertDate: currentDateString
+                    insertDate: currentDateString,
+                    country: 'FIN'
                 });
             }
             for (const curedCase of data.recovered) {
@@ -57,7 +59,8 @@ module.exports = {
                     date: curedCase.date,
                     healthCareDistrict: curedCase.healthCareDistrict,
                     isremoved: false,
-                    insertDate: currentDateString
+                    insertDate: currentDateString,
+                    country: 'FIN'
                 });
             }
 
@@ -68,12 +71,11 @@ module.exports = {
                 hospitalization.isremoved = false;
                 results.hospitalizations.push(hospitalization);
             }
-            console.log('going tuo update data');
             return database.updateOperation(operation);
         }).then(() => {
             resolve({status: 1, cases: results, type: operation.type, message: 'All done'});
         }).catch(e => {
-            console.log('Error getting cases');
+            console.log('Error getting cases from vendor');
             console.log(e);
             reject(e);
         });
