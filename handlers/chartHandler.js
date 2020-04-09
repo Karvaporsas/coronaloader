@@ -9,6 +9,7 @@ const moment = require('moment');
 const fs = require('fs');
 const Axios = require('axios');
 const database = require('./../database');
+const utils = require('./../utils');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const CHART_LINK_DAILY_NEW = process.env.CHART_LINK_DAILY_NEW;
 const CHART_LINK_HOSPITALIZATIONS = process.env.CHART_LINK_HOSPITALIZATIONS;
@@ -148,17 +149,16 @@ module.exports = {
     createHospitalizationCharts() {
         return new Promise((resolve, reject) => {
             database.getHospitalizations().then((hospitalizations) => {
-                const m = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0);
+                const mString = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0).format(utils.getTimeFormat());
                 var casesByDateGroup = _.chain(hospitalizations)
-                    .filter(function (c) { return c.date.isAfter(m) && c.area == REPORTING_AREA; })
+                    .filter(function (c) { return c.dateSortString > mString && c.area == REPORTING_AREA; })
                     .groupBy(function (c) { return c.day; })
                     .value();
 
                 var daySlots = [];
-                var daysToDraw = DAY_PERIOD -1; // not today
                 var hasHadValues = false;
                 var maxDeaths = 0;
-                for (let i = 0; i <= daysToDraw; i++) {
+                for (let i = 0; i <= DAY_PERIOD; i++) {
                     const dm = moment().subtract(DAY_PERIOD - i, 'days');
                     const keyString = dm.format('YYYY-MM-DD');
                     const dateGroup = casesByDateGroup[keyString];
@@ -179,7 +179,7 @@ module.exports = {
                     if (deaths > maxDeaths) maxDeaths = deaths;
                     if (deaths < maxDeaths) deaths = maxDeaths;
 
-                    if (!hasHadValues) continue;
+                    if (!hasHadValues || (!dateGroup && i == DAY_PERIOD)) continue;
 
                     daySlots.push({
                         day: keyString,

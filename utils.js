@@ -78,5 +78,8 @@ module.exports = {
             'Lappi',
             'HUS'
         ];
+    },
+    getTimeFormat() {
+        return 'YYYY-MM-DD HH:mm:ss';
     }
 };
