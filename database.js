@@ -240,6 +240,7 @@ module.exports = {
             }
 
             coronaCase[SORT_STRING_COL_NAME] = moment(coronaCase.date).format(DATE_SORT_STRING_FORMAT);
+            coronaCase.insertDateSortString = moment(coronaCase.insertDate).format(DATE_SORT_STRING_FORMAT);
 
             const params = {
                 TableName: tableName,
@@ -776,8 +777,8 @@ module.exports = {
             utils.performScan(dynamoDb, scanParams).then((items) => {
                 var promises = [];
                 for (const item of items) {
-                    //var d = moment(item[sourceCol]);
-                    promises.push(this.updateDateSortStringToItem(tableName, targetCol, 'FIN', {id: item.id}));
+                    var d = moment(item[sourceCol]).format(DATE_SORT_STRING_FORMAT);
+                    promises.push(this.updateDateSortStringToItem(tableName, targetCol, d, {id: item.id}));
                 }
                 return Promise.all(promises);
             }).then(() => {
