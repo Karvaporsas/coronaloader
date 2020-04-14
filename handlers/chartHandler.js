@@ -74,7 +74,7 @@ function _createChart(chartName, data) {
         .value();
 
     var daySlots = [];
-    var avgLineValues = [0, 0, 0, 0, 0];
+    var avgLineValues = [0, 0, 0, 0, 0, 0, 0];
     //var daysToDraw = DATASOURCE_FOR_CHARTS == 'S3' ? DAY_PERIOD -1 : DAY_PERIOD;
     var daysToDraw = DAY_PERIOD -1; // not today
     for (let i = 0; i <= daysToDraw; i++) {
