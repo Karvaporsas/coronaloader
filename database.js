@@ -180,6 +180,11 @@ module.exports = {
                     var tresholdFilteredDeaths = allInitialResults[1];
                     var tresholdFilteredRecovered = allInitialResults[2];
 
+                    var initialResultHashTable = {};
+                    for (const filteredConfirmedCase of tresholdFilteredConfirmed) {
+                        initialResultHashTable[filteredConfirmedCase.id] = filteredConfirmedCase;
+                    }
+
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
                         updatedCases.push(toDelete);
@@ -194,7 +199,20 @@ module.exports = {
                     }
                     console.log('Old deletions handled in ' + moment().diff(m) + ' milliseconds');
                     for (const coronaCase of confirmed) {
-                        promises.push(_updateCasePromise(_getOperationType(tresholdFilteredConfirmed, coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
+                        var shouldUpdateOrInsert = true;
+                        const oldCase = initialResultHashTable[coronaCase.id];
+
+                        if (oldCase) {
+                            if (oldCase.healthCareDistrict != coronaCase.healthCareDistrict || oldCase.infectionSource != coronaCase.infectionSource || oldCase.infectionSourceCountry != coronaCase.infectionSourceCountry) {
+                                shouldUpdateOrInsert = true;
+                            } else {
+                                shouldUpdateOrInsert = false;
+                            }
+                        }
+
+                        if (shouldUpdateOrInsert) {
+                            promises.push(_updateCasePromise(_getOperationType(tresholdFilteredConfirmed, coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
+                        }
                     }
                     for (const coronaCase of deaths) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
@@ -340,11 +358,14 @@ module.exports = {
 
             var params = {
                 TableName: tableName,
-                ProjectionExpression: '#id, #isremoved',
+                ProjectionExpression: '#id, #isremoved, #healthCareDistrict, #infectionSource, #infectionSourceCountry',
                 FilterExpression: '#sortString > :sortStringTreshold and #country = :country',
                 ExpressionAttributeNames: {
                     '#id': 'id',
                     '#isremoved': 'isremoved',
+                    '#healthCareDistrict': 'healthCareDistrict',
+                    '#infectionSource': 'infectionSource',
+                    '#infectionSourceCountry': 'infectionSourceCountry',
                     '#country': 'country',
                     '#sortString': SORT_STRING_COL_NAME
                 },
