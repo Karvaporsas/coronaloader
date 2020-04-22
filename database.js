@@ -133,8 +133,9 @@ module.exports = {
             }
         });
     },
-    updateCases(cases) {
+    updateCases(cases, tresholdDays) {
         return new Promise((resolve, reject) => {
+            var treshold = tresholdDays || UPDATE_TRESHOLD_DAYS;
             var updatedCases = [];
             var m = moment();
             if (!cases) {
@@ -147,7 +148,7 @@ module.exports = {
                 var confirmed = [];
                 var deaths = [];
                 var recovered = [];
-                var inputCasesTreshold = moment().subtract(UPDATE_TRESHOLD_DAYS, 'days');
+                var inputCasesTreshold = moment().subtract(treshold, 'days');
 
                 for (const cc of cases.confirmed) {
                     if (moment(cc.date).isAfter(inputCasesTreshold)) {
@@ -165,9 +166,9 @@ module.exports = {
                     }
                 }
 
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, UPDATE_TRESHOLD_DAYS));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, UPDATE_TRESHOLD_DAYS));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, UPDATE_TRESHOLD_DAYS));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, treshold));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
+                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
                 /*initialPromises.push(this.resetRemovedFromTable(CONFIRMED_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(DEATHS_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));

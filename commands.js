@@ -12,7 +12,7 @@ module.exports = {
             case 'autoload':
                 return loadHandler.autoLoad();
             case 'update':
-                return loadHandler.autoLoad(true);
+                return loadHandler.autoLoad(true, data.tresholdDays);
             case 'createcharts':
                 return chartHandler.createCharts();
             case 'createhospitalization':

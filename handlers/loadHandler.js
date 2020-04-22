@@ -25,11 +25,11 @@ function _load(operation) {
     });
 }
 
-function _storeResults(results, isUpdate) {
+function _storeResults(results, isUpdate, tresholdDays) {
     switch (results.type) {
         case 'HSOpen':
             console.log('storing');
-            return storeHandler.storeHSOpen(results.cases, isUpdate);
+            return storeHandler.storeHSOpen(results.cases, isUpdate, tresholdDays);
         case 'THL':
             return storeHandler.storeTHL(results.cases);
         default:
@@ -40,11 +40,11 @@ function _storeResults(results, isUpdate) {
 }
 
 module.exports = {
-    autoLoad(isUpdate) {
+    autoLoad(isUpdate, tresholdDays) {
         return new Promise((resolve, reject) => {
             database.getOldestOperation('coronaloader').then((operation) => {
                 _load(operation).then((results) => {
-                    _storeResults(results, isUpdate).then((insertResult) => {
+                    _storeResults(results, isUpdate, tresholdDays).then((insertResult) => {
                         if (DEBUG_MODE) {
                             console.log('Insertion result:');
                             console.log(insertResult);

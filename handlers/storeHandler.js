@@ -10,7 +10,7 @@ const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const THL_CASES_LINK = process.env.THL_CASES_LINK;
 
 module.exports = {
-    storeHSOpen(cases, isUpdate) {
+    storeHSOpen(cases, isUpdate, tresholdDays) {
         if (DEBUG_MODE) {
             console.log('starting to store cases');
         }
@@ -21,7 +21,7 @@ module.exports = {
         }
         if (isUpdate) {
             console.log('updating');
-            return database.updateCases(cases);
+            return database.updateCases(cases, tresholdDays);
         } else {
             return database.insertCases(cases);
         }
