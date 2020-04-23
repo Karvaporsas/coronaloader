@@ -45,6 +45,7 @@ module.exports = {
             database.getOldestOperation('coronaloader').then((operation) => {
                 _load(operation).then((results) => {
                     _storeResults(results, isUpdate, tresholdDays).then((insertResult) => {
+                        console.log('Insertions done');
                         if (DEBUG_MODE) {
                             console.log('Insertion result:');
                             console.log(insertResult);
@@ -61,6 +62,7 @@ module.exports = {
                         }
 
                         Promise.all(finalPromises).then(() => {
+                            console.log('Final promises done');
                             resolve(`Data loaded by operation ${operation.name} from ${operation.type}. ${results.message}`);
                         }).catch((e) => {
                             console.log('Failed to update charts');
