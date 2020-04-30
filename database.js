@@ -20,7 +20,8 @@ const THL_CASES_LINK = process.env.THL_CASES_LINK;
 const CASE_BUCKET = process.env.CASE_BUCKET;
 const UPDATE_TRESHOLD_DAYS = process.env.UPDATE_TRESHOLD_DAYS || 8;
 const HOSPITALIZED_TABLE = process.env.HOSPITALIZED_TABLE;
-const DATE_SORT_STRING_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+const DATE_TIME_SORT_STRING_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+const DATE_SORT_STRING_FORMAT = 'YYYY-MM-DD';
 const SORT_STRING_COL_NAME = 'dateSortString';
 const CORONA_INFO_TYPE = {
     'DEATH': 'DEATH',
@@ -258,8 +259,8 @@ module.exports = {
                     break;
             }
 
-            coronaCase[SORT_STRING_COL_NAME] = moment(coronaCase.date).format(DATE_SORT_STRING_FORMAT);
-            coronaCase.insertDateSortString = moment(coronaCase.insertDate).format(DATE_SORT_STRING_FORMAT);
+            coronaCase[SORT_STRING_COL_NAME] = moment(coronaCase.date).format(DATE_TIME_SORT_STRING_FORMAT);
+            coronaCase.insertDateSortString = moment(coronaCase.insertDate).format(DATE_TIME_SORT_STRING_FORMAT);
 
             const params = {
                 TableName: tableName,
@@ -282,7 +283,10 @@ module.exports = {
     },
     insertHospitalization(hospitalization) {
         return new Promise((resolve, reject) => {
-            hospitalization[SORT_STRING_COL_NAME] = moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
+            const self = this;
+            const dateFormatted = moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
+            hospitalization[SORT_STRING_COL_NAME] = dateFormatted;
+            hospitalization.date = dateFormatted;
             var params = {
                 TableName: HOSPITALIZED_TABLE,
                 Item: hospitalization,
@@ -298,11 +302,43 @@ module.exports = {
                     console.log(err);
                     reject(err);
                 } else if (err && err.code === 'ConditionalCheckFailedException') {
-                    resolve();
+                    self.updateHospitalization(hospitalization, resolve, reject);
                 } else {
                     resolve(hospitalization);
                 }
             });
+        });
+    },
+    updateHospitalization(hospitalization, resolve, reject) {
+        var params = {
+            TableName: HOSPITALIZED_TABLE,
+            Key: {
+                'area': hospitalization.area,
+                'date': hospitalization.date
+            },
+            UpdateExpression: 'set #dead = :dead, #inIcu = :inIcu, #inWard = :inWard, #totalHospitalised = :totalHospitalised',
+            ExpressionAttributeNames: {
+                '#dead': 'dead',
+                '#inIcu': 'inIcu',
+                '#inWard': 'inWard',
+                '#totalHospitalised': 'totalHospitalised'
+            },
+            ExpressionAttributeValues: {
+                ':dead': hospitalization.dead,
+                ':inIcu': hospitalization.inIcu,
+                ':inWard': hospitalization.inWard,
+                ':totalHospitalised': hospitalization.totalHospitalised
+            }
+        };
+
+        dynamoDb.update(params, function (err, data) {
+            if (err) {
+                console.log('Error while updating confirmed');
+                console.log(err);
+                reject(err);
+            } else {
+                resolve(hospitalization);
+            }
         });
     },
     getHospitalizations() {
@@ -371,7 +407,7 @@ module.exports = {
                     '#sortString': SORT_STRING_COL_NAME
                 },
                 ExpressionAttributeValues: {
-                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT),
+                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_TIME_SORT_STRING_FORMAT),
                     ':country': 'FIN'
                 }
             };
@@ -799,7 +835,7 @@ module.exports = {
             utils.performScan(dynamoDb, scanParams).then((items) => {
                 var promises = [];
                 for (const item of items) {
-                    var d = moment(item[sourceCol]).format(DATE_SORT_STRING_FORMAT);
+                    var d = moment(item[sourceCol]).format(DATE_TIME_SORT_STRING_FORMAT);
                     promises.push(this.updateDateSortStringToItem(tableName, targetCol, d, {id: item.id}));
                 }
                 return Promise.all(promises);
