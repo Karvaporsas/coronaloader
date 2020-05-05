@@ -79,7 +79,7 @@ module.exports = {
             'HUS'
         ];
     },
-    getTimeFormat() {
-        return 'YYYY-MM-DD HH:mm:ss';
+    getShortTimeFormat() {
+        return 'YYYY-MM-DD';
     }
 };

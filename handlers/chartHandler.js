@@ -148,11 +148,11 @@ module.exports = {
     },
     createHospitalizationCharts() {
         return new Promise((resolve, reject) => {
-            database.getHospitalizations().then((hospitalizations) => {
-                const mString = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0).format(utils.getTimeFormat());
+            database.getHospitalizations(DAY_PERIOD + 1).then((hospitalizations) => {
+                const mString = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0).format(utils.getShortTimeFormat());
                 var casesByDateGroup = _.chain(hospitalizations)
                     .filter(function (c) { return c.dateSortString > mString && c.area == REPORTING_AREA; })
-                    .groupBy(function (c) { return c.day; })
+                    .groupBy(function (c) { return c.date; })
                     .value();
 
                 var daySlots = [];
@@ -160,7 +160,7 @@ module.exports = {
                 var maxDeaths = 0;
                 for (let i = 0; i <= DAY_PERIOD; i++) {
                     const dm = moment().subtract(DAY_PERIOD - i, 'days');
-                    const keyString = dm.format('YYYY-MM-DD');
+                    const keyString = dm.format(utils.getShortTimeFormat());
                     const dateGroup = casesByDateGroup[keyString];
                     var inHospital = 0;
                     var inICU = 0;
