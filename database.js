@@ -149,7 +149,9 @@ module.exports = {
                 var confirmed = [];
                 var deaths = [];
                 var recovered = [];
+                var hospitalizations = [];
                 var inputCasesTreshold = moment().subtract(treshold, 'days');
+                const inputCasesTresholdString = inputCasesTreshold.format(DATE_SORT_STRING_FORMAT);
 
                 for (const cc of cases.confirmed) {
                     if (moment(cc.date).isAfter(inputCasesTreshold)) {
@@ -166,10 +168,16 @@ module.exports = {
                         recovered.push(cc);
                     }
                 }
+                for (const hh of cases.hospitalizations) {
+                    if (moment(hh.date).format(DATE_SORT_STRING_FORMAT) >= inputCasesTresholdString) {
+                        hospitalizations.push(hh);
+                    }
+                }
 
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, treshold));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
+                initialPromises.push(this.getHospitalizations(treshold));
                 /*initialPromises.push(this.resetRemovedFromTable(CONFIRMED_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(DEATHS_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));
@@ -181,10 +189,21 @@ module.exports = {
                     var tresholdFilteredConfirmed = allInitialResults[0];
                     var tresholdFilteredDeaths = allInitialResults[1];
                     var tresholdFilteredRecovered = allInitialResults[2];
-
+                    var tresholdFilteredHospitalizations = allInitialResults[3];
                     var initialResultHashTable = {};
+                    var deathsHashTable = {};
+                    var hospitalizationHashTable = {};
+
                     for (const filteredConfirmedCase of tresholdFilteredConfirmed) {
                         initialResultHashTable[filteredConfirmedCase.id] = filteredConfirmedCase;
+                    }
+                    for (const filteredDeath of tresholdFilteredDeaths) {
+                        deathsHashTable[filteredDeath.id] = filteredDeath;
+                    }
+                    for (const filteredHospn of tresholdFilteredHospitalizations) {
+                        var key = '' + filteredHospn.area + moment(filteredHospn.date).format(DATE_SORT_STRING_FORMAT);
+
+                        hospitalizationHashTable[key] = filteredHospn;
                     }
 
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
@@ -217,16 +236,55 @@ module.exports = {
                         }
                     }
                     for (const coronaCase of deaths) {
-                        promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
+                        var shouldUpdateOrInsertDeath = true;
+                        const oldDeath = deathsHashTable[coronaCase.id];
+
+                        if (oldDeath) {
+                            if (oldDeath.healthCareDistrict != coronaCase.healthCareDistrict) {
+                                shouldUpdateOrInsertDeath = true;
+                            } else {
+                                shouldUpdateOrInsertDeath = false;
+                            }
+                        }
+
+                        if (shouldUpdateOrInsertDeath) {
+                            promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
+                        }
                     }
                     for (const coronaCase of recovered) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredRecovered, coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
                     }
                     console.log('Update promises handled in ' + moment().diff(m) + ' milliseconds');
-                    for (const hospitalization of cases.hospitalizations) {
-                        promises.push(this.insertHospitalization(hospitalization).then((res) => { //jshint ignore:line
-                            if (res) updatedCases.push(res);
-                        }));
+                    for (const hospitalization of hospitalizations) {
+                        var shouldUpdateOrInsertHospitalization = true;
+                        var isNew = true;
+                        var kkey = '' + hospitalization.area + moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
+                        var oldHospitalization = hospitalizationHashTable[kkey];
+
+                        if (oldHospitalization) {
+                            isNew = false;
+                            if (hospitalization.dead != oldHospitalization.dead || hospitalization.inIcu != oldHospitalization.inIcu || hospitalization.inWard != oldHospitalization.inWard || hospitalization.totalHospitalised != oldHospitalization.totalHospitalised) {
+                                shouldUpdateOrInsertHospitalization = true;
+                            } else {
+                                shouldUpdateOrInsertHospitalization = false;
+                            }
+
+                            if (oldHospitalization.longDateString < moment(hospitalization.date).format(DATE_TIME_SORT_STRING_FORMAT)) {
+                                shouldUpdateOrInsertHospitalization = false;
+                            }
+                        }
+
+                        if (shouldUpdateOrInsertHospitalization) {
+                            if (isNew) {
+                                promises.push(this.insertHospitalization(hospitalization).then((res) => { //jshint ignore:line
+                                    if (res) updatedCases.push(res);
+                                }));
+                            } else {
+                                promises.push(this.updateHospitalizationWithPromise(hospitalization).then((res) => { //jshint ignore:line
+                                    if (res) updatedCases.push(res);
+                                }));
+                            }
+                        }
                     }
                     console.log('Hospitalizations handled in ' + moment().diff(m) + ' milliseconds');
                     return Promise.all(promises);
@@ -286,6 +344,7 @@ module.exports = {
             const self = this;
             const dateFormatted = moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
             hospitalization[SORT_STRING_COL_NAME] = dateFormatted;
+            hospitalization.longDateString = moment(hospitalization.date).format(DATE_TIME_SORT_STRING_FORMAT);
             hospitalization.date = dateFormatted;
             var params = {
                 TableName: HOSPITALIZED_TABLE,
@@ -307,6 +366,11 @@ module.exports = {
                     resolve(hospitalization);
                 }
             });
+        });
+    },
+    updateHospitalizationWithPromise(hospitalization) {
+        return new Promise((resolve, reject) => {
+            this.updateHospitalization(hospitalization, resolve, reject);
         });
     },
     updateHospitalization(hospitalization, resolve, reject) {
@@ -341,27 +405,25 @@ module.exports = {
             }
         });
     },
-    getHospitalizations() {
+    getHospitalizations(fromSinceDays = 0) {
         return new Promise((resolve, reject) => {
             var params = {
                 TableName: HOSPITALIZED_TABLE,
-                FilterExpression: '#isremoved <> :isremoved',
+                FilterExpression: '#sortString >= :sortStringTreshold',
                 ExpressionAttributeNames: {
-                    '#isremoved': 'isremoved'
+                    '#sortString': SORT_STRING_COL_NAME
                 },
                 ExpressionAttributeValues: {
-                    ':isremoved': true
+                    ':sortStringTreshold': moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT)
                 }
             };
 
             utils.performScan(dynamoDb, params).then((results) => {
-                for (const cc of results) {
-                    var d = moment(cc.date);
-                    cc.day = d.format('YYYY-MM-DD');
-                    cc.date = d;
+                if (!results || !results.length) {
+                    resolve([]);
+                } else {
+                    resolve(results);
                 }
-
-                resolve(results);
             }).catch((e) => {
                 console.log('Error getting hospitalizations');
                 console.log(e);
