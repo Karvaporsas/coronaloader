@@ -36,7 +36,7 @@ module.exports = {
                     id: confirmedCase.id,
                     date: confirmedCase.date,
                     healthCareDistrict: confirmedCase.healthCareDistrict || null,
-                    infectionSourceCountry: confirmedCase.infectionSourceCountry || 'unknown',
+                    infectionSourceCountry: confirmedCase.infectionSourceCountry || null,
                     infectionSource: confirmedCase.infectionSource,
                     isremoved: false,
                     insertDate: currentDateString,
