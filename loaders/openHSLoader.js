@@ -1,9 +1,16 @@
 /*jslint node: true */
 /*jshint esversion: 6 */
 'use strict';
+const moment = require('moment');
 const database = require('../database');
+const utils = require('./../utils');
 const Axios = require('axios');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
+const _inboundDateFormat = utils.getDefaultInboundDateTimeFormat();
+
+function _isCorrectCaseTimeValue(c) {
+    return moment(c.date, _inboundDateFormat).format('HH:mm:ss') == '15:00:00';
+}
 
 module.exports = {
     load(operation, resolve, reject) {
@@ -32,9 +39,11 @@ module.exports = {
             var data = result.data;
 
             for (const confirmedCase of data.confirmed) {
+                if (!_isCorrectCaseTimeValue(confirmedCase)) continue;
+
                 results.confirmed.push({
                     id: confirmedCase.id,
-                    date: confirmedCase.date,
+                    date: moment(confirmedCase.date, _inboundDateFormat).format(utils.getDateTimeFormat()),
                     healthCareDistrict: confirmedCase.healthCareDistrict || null,
                     infectionSourceCountry: confirmedCase.infectionSourceCountry || null,
                     infectionSource: confirmedCase.infectionSource,
@@ -46,7 +55,7 @@ module.exports = {
             for (const death of data.deaths) {
                 results.deaths.push({
                     id: death.id,
-                    date: death.date,
+                    date: moment(death.date, _inboundDateFormat).format(utils.getDateTimeFormat()),
                     healthCareDistrict: death.healthCareDistrict,
                     isremoved: false,
                     insertDate: currentDateString,
@@ -56,7 +65,7 @@ module.exports = {
             for (const curedCase of data.recovered) {
                 results.recovered.push({
                     id: curedCase.id,
-                    date: curedCase.date,
+                    date: moment(curedCase.date, _inboundDateFormat).format(utils.getDateTimeFormat()),
                     healthCareDistrict: curedCase.healthCareDistrict,
                     isremoved: false,
                     insertDate: currentDateString,

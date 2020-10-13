@@ -49,9 +49,14 @@ function _getOperationType(list, id) {
 
 function _getDifference(oldCases, inputCases) {
     var oldMap = _.chain(oldCases).filter(function (c) { return !c.isremoved; }).map(function(c) {return c.id; }).value();
-    var inputMap = _.map(inputCases, function (c) { return c.id; });
+    var inputMap = _.chain(inputCases).map(function (c) { return c.id; }).value();
+    var d = []; //_.difference(oldMap, inputMap);
 
-    return _.difference(oldMap, inputMap);
+    for (const old of oldMap) {
+        if (inputMap.indexOf(old) == -1) d.push(old);
+    }
+
+    return d;
 }
 
 function _insertCasePromise(type, coronaCase, self, insertedCases) {
@@ -178,9 +183,14 @@ module.exports = {
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
                 initialPromises.push(this.getHospitalizations(treshold));
+
+                /*initialPromises.push(this.updateDateOfCases(CONFIRMED_TABLE));
+                initialPromises.push(this.updateDateOfCases(DEATHS_TABLE));
+                initialPromises.push(this.updateDateOfCases(RECOVERED_TABLE));*/
                 /*initialPromises.push(this.resetRemovedFromTable(CONFIRMED_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(DEATHS_TABLE));
                 initialPromises.push(this.resetRemovedFromTable(RECOVERED_TABLE));
+                initialPromises.push(this.setInfectionSourceCountryToNullForAll(CONFIRMED_TABLE));
                 initialPromises.push(this.addDateSortStrings(CONFIRMED_TABLE, '', 'country'));*/
 
                 Promise.all(initialPromises).then((allInitialResults) => {
@@ -196,6 +206,9 @@ module.exports = {
 
                     for (const filteredConfirmedCase of tresholdFilteredConfirmed) {
                         initialResultHashTable[filteredConfirmedCase.id] = filteredConfirmedCase;
+                        if (filteredConfirmedCase.id == 'Kymenlaakso_2020-05-01T12:00:00.000Z_1' ) {
+                            console.log('kurkkaa se');
+                        }
                     }
                     for (const filteredDeath of tresholdFilteredDeaths) {
                         deathsHashTable[filteredDeath.id] = filteredDeath;
@@ -208,6 +221,9 @@ module.exports = {
 
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
+                        if (toDelete == 'Kymenlaakso_2020-05-01T12:00:00.000Z_1') {
+                            console.log('merkataan poistetuksi');
+                        }
                         updatedCases.push(toDelete);
                     }
                     for (const toDelete of _getDifference(tresholdFilteredDeaths, deaths)) {
@@ -222,8 +238,13 @@ module.exports = {
                     for (const coronaCase of confirmed) {
                         var shouldUpdateOrInsert = true;
                         const oldCase = initialResultHashTable[coronaCase.id];
-
+                        if (coronaCase.id == 'Kymenlaakso_2020-05-01T12:00:00.000Z_1' ) {
+                            console.log('yritetään käsitellä');
+                        }
                         if (oldCase) {
+                            if (oldCase.id == 'Kymenlaakso_2020-05-01T12:00:00.000Z_1' ) {
+                                console.log('löyty vanha');
+                            }
                             if (oldCase.healthCareDistrict != coronaCase.healthCareDistrict || oldCase.infectionSource != coronaCase.infectionSource || oldCase.infectionSourceCountry != coronaCase.infectionSourceCountry) {
                                 shouldUpdateOrInsert = true;
                             } else {
@@ -436,6 +457,9 @@ module.exports = {
             var tableName = '';
             var indexName = '';
             var queryType = 'scan';
+            const dateStringTreshold = moment().subtract(fromSinceDays, 'days').format(DATE_TIME_SORT_STRING_FORMAT);
+            console.log('date string treshold is');
+            console.log(dateStringTreshold);
 
             switch (type) {
                 case CORONA_INFO_TYPE.CONFIRMED:
@@ -457,7 +481,7 @@ module.exports = {
 
             var params = {
                 TableName: tableName,
-                ProjectionExpression: '#id, #isremoved, #healthCareDistrict, #infectionSource, #infectionSourceCountry',
+                ProjectionExpression: '#id, #isremoved, #healthCareDistrict, #infectionSource, #infectionSourceCountry, #date',
                 FilterExpression: '#sortString > :sortStringTreshold and #country = :country',
                 ExpressionAttributeNames: {
                     '#id': 'id',
@@ -466,10 +490,11 @@ module.exports = {
                     '#infectionSource': 'infectionSource',
                     '#infectionSourceCountry': 'infectionSourceCountry',
                     '#country': 'country',
+                    '#date': 'date',
                     '#sortString': SORT_STRING_COL_NAME
                 },
                 ExpressionAttributeValues: {
-                    ':sortStringTreshold' : moment().subtract(fromSinceDays, 'days').format(DATE_TIME_SORT_STRING_FORMAT),
+                    ':sortStringTreshold' : dateStringTreshold,
                     ':country': 'FIN'
                 }
             };
@@ -910,6 +935,99 @@ module.exports = {
             });
         });
     },
+    updateDateOfCases(tableName) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName
+            };
+
+            utils.performScan(dynamoDb, params).then((items) => {
+                var promises = [];
+                for (const item of items) {
+                    promises.push(this.updateDateOfItem(tableName, {id: item.id}, item.date));
+                }
+                return Promise.all(promises);
+            }).then(() => {
+                resolve();
+            }).catch((e) => {
+                console.log('Error getting cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    updateDateOfItem(tableName, key, oldValue) {
+        return new Promise((resolve, reject) => {
+            var newDateString = moment(oldValue, utils.getDefaultInboundDateTimeFormat()).format(utils.getDateTimeFormat());
+            var params = {
+                TableName: tableName,
+                Key: key,
+                UpdateExpression: 'set #d = :dv',
+                ExpressionAttributeNames: {
+                    '#d': 'date'
+                },
+                ExpressionAttributeValues: {
+                    ':dv': newDateString
+                }
+            };
+
+            dynamoDb.update(params, function (err) {
+                if (err) {
+                    console.log('Error updating date');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    },
+    setInfectionSourceCountryToNullForAll(tableName) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName
+            };
+
+            utils.performScan(dynamoDb, params).then((items) => {
+                var promises = [];
+                for (const item of items) {
+                    promises.push(this.setInfectionSourceCountryToNull(tableName, {id: item.id}));
+                }
+                return Promise.all(promises);
+            }).then(() => {
+                resolve();
+            }).catch((e) => {
+                console.log('Error getting cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    setInfectionSourceCountryToNull(tableName, key) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName,
+                Key: key,
+                UpdateExpression: 'set #isc = :nll',
+                ExpressionAttributeNames: {
+                    '#isc': 'infectionSourceCountry'
+                },
+                ExpressionAttributeValues: {
+                    ':nll': null
+                }
+            };
+
+            dynamoDb.update(params, function (err) {
+                if (err) {
+                    console.log('Error setting isc to null');
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    },
     resetRemovedFromTable(tableName) {
         return new Promise((resolve, reject) => {
             var scanParams = {
@@ -926,7 +1044,7 @@ module.exports = {
             }).then(() => {
                 resolve();
             }).catch((e) => {
-                console.log('Error getting confirmed cases');
+                console.log('Error getting some cases');
                 console.log(e);
                 reject(e);
             });

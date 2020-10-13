@@ -13,7 +13,7 @@ const utils = require('./../utils');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const CHART_LINK_DAILY_NEW = process.env.CHART_LINK_DAILY_NEW;
 const CHART_LINK_HOSPITALIZATIONS = process.env.CHART_LINK_HOSPITALIZATIONS;
-const DAY_PERIOD = 30;
+const DAY_PERIOD = 60;
 const DATASOURCE_FOR_CHARTS = process.env.DATASOURCE_FOR_CHARTS || 'DB';
 const CASE_BUCKET = process.env.CASE_BUCKET;
 const REPORTING_AREA = 'Finland';
@@ -157,36 +157,37 @@ module.exports = {
 
                 var daySlots = [];
                 var hasHadValues = false;
-                var maxDeaths = 0;
+
+                //var maxDeaths = 0;
                 for (let i = 0; i <= DAY_PERIOD; i++) {
                     const dm = moment().subtract(DAY_PERIOD - i, 'days');
                     const keyString = dm.format(utils.getShortTimeFormat());
                     const dateGroup = casesByDateGroup[keyString];
                     var inHospital = 0;
                     var inICU = 0;
-                    var deaths = 0;
+                    //var deaths = 0;
 
                     if (dateGroup) {
                         inHospital = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.totalHospitalised; }, 0);
                         inICU = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.inIcu; }, 0);
-                        deaths = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.dead; }, 0);
+                        //deaths = _.reduce(casesByDateGroup[keyString], function (mem, c) { return mem + c.dead; }, 0);
 
-                        if (inHospital || inICU || deaths) {
+                        if (inHospital || inICU) {
                             hasHadValues = true;
                         }
                     }
 
-                    if (deaths > maxDeaths) maxDeaths = deaths;
-                    if (deaths < maxDeaths) deaths = maxDeaths;
+                    //if (deaths > maxDeaths) maxDeaths = deaths;
+                    //if (deaths < maxDeaths) deaths = maxDeaths;
 
-                    if (!hasHadValues || (!dateGroup && i == DAY_PERIOD)) continue;
+                    if (!hasHadValues || (!dateGroup && i == DAY_PERIOD) || !dateGroup) continue;
 
                     daySlots.push({
                         day: keyString,
                         dateString: dm.format('D.M.'),
                         inHospital: inHospital,
                         inICU: inICU,
-                        deaths: deaths
+                        //deaths: deaths
                     });
                 }
                 var labels = _.map(daySlots, function (slot) { return slot.dateString; });
@@ -215,13 +216,13 @@ module.exports = {
                                     fill: false,
                                     borderColor: 'rgba(252, 20, 3, 1)',
                                     pointRadius: 0.1
-                                },{
+                                }/*,{
                                     label: 'Kuolleet',
                                     data: deadValues,
                                     fill: false,
                                     borderColor: 'rgba(0, 0, 0, 1)',
                                     pointRadius: 0.1
-                                }
+                                }*/
                             ]
                         }
                     }

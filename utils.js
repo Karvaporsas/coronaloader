@@ -5,6 +5,43 @@
 const crypto = require('crypto');
 const USE_LARGE_SCAN = process.env.USE_LARGE_SCAN === 'ON';
 
+function _pagedQuery(dynamoDb, params, allResults, lastEvaluatedKey, resolve, reject) {
+    if (lastEvaluatedKey !== false) {
+        params.ExclusiveStartKey = lastEvaluatedKey.id;
+        delete params.IndexName;
+/**params.IndexName = indexName;
+                params.KeyConditionExpression = params.FilterExpression;
+                delete params.FilterExpression; */
+
+
+        /*if (params.KeyConditionExpression) {
+            params.FilterExpression = params.KeyConditionExpression;
+            delete params.IndexName;
+            delete params.KeyConditionExpression;
+        }*/
+
+        console.log(params);
+    } else {
+        delete params.ExclusiveStartKey;
+    }
+    dynamoDb.query(params, function(err, data) {
+        if (err) {
+            console.log(`Error loading data by query`);
+            console.log(err);
+            reject(err);
+        } else {
+            for (const item of data.Items) {
+                allResults.push(item);
+            }
+            if (data.LastEvaluatedKey) {
+                _pagedQuery(dynamoDb, params, allResults, data.LastEvaluatedKey, resolve, reject);
+            } else {
+                resolve(allResults);
+            }
+        }
+    });
+}
+
 module.exports = {
     /**
      * Performs scan for database. Results are sent to resolve function
@@ -18,7 +55,7 @@ module.exports = {
         return new Promise((resolve, reject) => {
             function chatScan(err, data) {
                 if (err) {
-                    console.log(`Error while scanning table ${params.tableName}`);
+                    console.log(`Error while scanning table ${params.TableName}`);
                     console.log(err);
                     console.log(params);
                     reject(err);
@@ -47,6 +84,12 @@ module.exports = {
             var allResults = [];
 
             dynamoDb.scan(params, chatScan);
+        });
+    },
+    performQuery(dynamoDb, params) {
+        return new Promise((resolve, reject) => {
+            var allResults = [];
+            _pagedQuery(dynamoDb, params, allResults, false, resolve, reject);
         });
     },
     createHash(source) {
@@ -81,5 +124,11 @@ module.exports = {
     },
     getShortTimeFormat() {
         return 'YYYY-MM-DD';
+    },
+    getDateTimeFormat() {
+        return 'YYYY-MM-DD HH:mm:ss';
+    },
+    getDefaultInboundDateTimeFormat() {
+        return 'YYYY-MM-DDTHH:mm:ss';
     }
 };
