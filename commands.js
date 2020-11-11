@@ -4,6 +4,7 @@
 
 const loadHandler = require('./handlers/loadHandler');
 const chartHandler = require('./handlers/chartHandler');
+const utils = require('./utils');
 
 module.exports = {
     process(command, data) {
@@ -14,7 +15,15 @@ module.exports = {
             case 'update':
                 return loadHandler.autoLoad(true, data.tresholdDays);
             case 'createcharts':
-                return chartHandler.createCharts();
+                return chartHandler.createCharts(data.hcd || '');
+            case 'createallcharts':
+                var promises = [];
+                for (const hcd of utils.getHCDNames()) {
+                    promises.push(this.process('createcharts', {hcd: hcd}));
+                }
+                promises.push(this.process('createcharts', {}));
+
+                return Promise.all(promises);
             case 'createhospitalization':
                 return chartHandler.createHospitalizationCharts();
             default:

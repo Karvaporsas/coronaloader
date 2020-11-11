@@ -66,8 +66,13 @@ function _loadChartToS3(chartName, body) {
     });
 }
 
-function _createChart(chartName, data) {
+function _createChart(chartName, data, hcd) {
     const m = moment().subtract(DAY_PERIOD + 1, 'days').set('hour', 0).set('minutes', 0).set('seconds', 0);
+
+    if (hcd && hcd.length) {
+        data = _.filter(data, function (c) {return c.healthCareDistrict === hcd; });
+    }
+
     var casesByDateGroup = _.chain(data)
         .filter(function (c) { return c.date.isAfter(m); })
         .groupBy(function (c) { return c.day; })
@@ -108,7 +113,7 @@ function _createChart(chartName, data) {
             data: {
                 labels: labels,
                 datasets: [{
-                        label: 'Uudet tapaukset',
+                        label: 'Uudet tapaukset' + (hcd ? ` - ${hcd}` : ''),
                         data: dayValues,
                         fill: false,
                         borderColor: 'rgba(53,108,181,1)',
@@ -125,18 +130,21 @@ function _createChart(chartName, data) {
             }
         }
     };
+    var finalChartName = chartName + (hcd ? `_${hcd}` : '');
+    console.log(`Final chart name is ${finalChartName}`);
 
-    return _loadChartToS3(chartName, body);
+    return _loadChartToS3(finalChartName, body);
 }
 
 module.exports = {
-    createCharts() {
+    createCharts(hcd) {
         if (DEBUG_MODE) {
             console.log('starting to create charts');
+            console.log(`HCD is ${hcd}`);
         }
         return new Promise((resolve, reject) => {
             database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
-                return _createChart(CHART_LINK_DAILY_NEW, confirmedCases);
+                return _createChart(CHART_LINK_DAILY_NEW, confirmedCases, hcd);
             }).then((chartLink) => {
                 return database.updateChartLink(chartLink);
             }).then((status) => {
