@@ -137,14 +137,24 @@ function _createChart(chartName, data, hcd) {
 }
 
 module.exports = {
-    createCharts(hcd) {
+    createCharts(hcd, timeout, cached) {
         if (DEBUG_MODE) {
             console.log('starting to create charts');
-            console.log(`HCD is ${hcd}`);
         }
         return new Promise((resolve, reject) => {
-            database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
-                return _createChart(CHART_LINK_DAILY_NEW, confirmedCases, hcd);
+            database.getConfirmedCases(DATASOURCE_FOR_CHARTS, cached).then((confirmedCases) => {
+
+                if (timeout) {
+                    return new Promise((resolve, reject) => {
+                        setTimeout(function () {
+                            console.log(`HCD is ${hcd}`);
+                            resolve(_createChart(CHART_LINK_DAILY_NEW, confirmedCases, hcd));
+                        }, timeout);
+                    });
+                } else {
+                    console.log(`HCD is ${hcd}`);
+                    return _createChart(CHART_LINK_DAILY_NEW, confirmedCases, hcd);
+                }
             }).then((chartLink) => {
                 return database.updateChartLink(chartLink);
             }).then((status) => {

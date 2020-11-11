@@ -5,6 +5,8 @@
 const loadHandler = require('./handlers/loadHandler');
 const chartHandler = require('./handlers/chartHandler');
 const utils = require('./utils');
+const database = require('./database');
+const DATASOURCE_FOR_CHARTS = process.env.DATASOURCE_FOR_CHARTS || 'DB';
 
 module.exports = {
     process(command, data) {
@@ -17,13 +19,26 @@ module.exports = {
             case 'createcharts':
                 return chartHandler.createCharts(data.hcd || '');
             case 'createallcharts':
-                var promises = [];
-                for (const hcd of utils.getHCDNames()) {
-                    promises.push(this.process('createcharts', {hcd: hcd}));
-                }
-                promises.push(this.process('createcharts', {}));
+                return new Promise((resolve, reject) => {
+                    database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
+                        var promises = [];
+                        var districts = utils.getHCDNames();
+                        var timeout = 1500;
 
-                return Promise.all(promises);
+                        for (const hcd of districts) {
+                            console.log(`Iterating now: ${hcd}`);
+                            promises.push( chartHandler.createCharts(hcd, timeout, confirmedCases));
+                            timeout += 1500;
+                        }
+                        promises.push(chartHandler.createCharts('', timeout));
+
+                        return Promise.all(promises);
+                    }).then(() => {
+                        resolve();
+                    });
+                });
+
+
             case 'createhospitalization':
                 return chartHandler.createHospitalizationCharts();
             default:

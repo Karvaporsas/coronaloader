@@ -761,13 +761,19 @@ module.exports = {
             });
         });
     },
-    getConfirmedCases(dataSource) {
+    getConfirmedCases(dataSource, cached) {
         switch (dataSource) {
             case 'S3':
                 return this.getConfirmedCasesFromS3();
             case 'DB':
             default:
-                return this.getConfirmedCasesFromDB();
+                if (cached) {
+                    return new Promise((resolve, reject) => {
+                        resolve(cached);
+                    });
+                } else {
+                    return this.getConfirmedCasesFromDB();
+                }
         }
 
     },
