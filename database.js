@@ -130,7 +130,7 @@ module.exports = {
                 }
 
                 Promise.all(promises).then(() => {
-                    resolve({status: 1, message: `${insertedCases.length} cases inserted`});
+                    resolve({status: 1, message: `${insertedCases.length} cases inserted`, amount: insertedCases.length});
                 }).catch((e) => {
                     console.log('Error inserting cases');
                     console.log(e);

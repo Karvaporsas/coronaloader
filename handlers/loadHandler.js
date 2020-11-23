@@ -8,6 +8,7 @@ const storeHandler = require('./storeHandler');
 const database = require('../database');
 const chartHandler = require('./chartHandler');
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
+const HCD_CHARTS_RECRETE_TRESHOLD = process.env.HCD_CHARTS_RECRETE_TRESHOLD ? parseInt(process.env.HCD_CHARTS_RECRETE_TRESHOLD, 10) : 0;
 
 function _load(operation) {
     return new Promise((resolve, reject) => {
@@ -53,7 +54,12 @@ module.exports = {
                         var finalPromises = [];
 
                         if (insertResult.amount) {
-                            finalPromises.push(chartHandler.createCharts());
+                            if (insertResult.amount > HCD_CHARTS_RECRETE_TRESHOLD) {
+                                finalPromises.push(chartHandler.createAllCharts());
+                            } else {
+                                finalPromises.push(chartHandler.createCharts());
+                            }
+
                             finalPromises.push(chartHandler.createHospitalizationCharts());
                         } else {
                             finalPromises.push(new Promise((innerResolve, innerReject) => {

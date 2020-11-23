@@ -137,6 +137,29 @@ function _createChart(chartName, data, hcd) {
 }
 
 module.exports = {
+    createAllCharts() {
+        var self = this;
+        return new Promise((resolve, reject) => {
+            database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
+                var promises = [];
+                var districts = utils.getHCDNames();
+                var timeout = 1500;
+
+                for (const hcd of districts) {
+                    console.log(`Iterating now: ${hcd}`);
+                    promises.push(self.createCharts(hcd, timeout, confirmedCases));
+                    timeout += 1500;
+                }
+                promises.push(self.createCharts('', timeout));
+
+                return Promise.all(promises);
+            }).then(() => {
+                resolve();
+            }).catch((e) => {
+                reject(e);
+            });
+        });
+    },
     createCharts(hcd, timeout, cached) {
         if (DEBUG_MODE) {
             console.log('starting to create charts');

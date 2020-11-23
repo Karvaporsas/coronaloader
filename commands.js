@@ -19,26 +19,7 @@ module.exports = {
             case 'createcharts':
                 return chartHandler.createCharts(data.hcd || '');
             case 'createallcharts':
-                return new Promise((resolve, reject) => {
-                    database.getConfirmedCases(DATASOURCE_FOR_CHARTS).then((confirmedCases) => {
-                        var promises = [];
-                        var districts = utils.getHCDNames();
-                        var timeout = 1500;
-
-                        for (const hcd of districts) {
-                            console.log(`Iterating now: ${hcd}`);
-                            promises.push( chartHandler.createCharts(hcd, timeout, confirmedCases));
-                            timeout += 1500;
-                        }
-                        promises.push(chartHandler.createCharts('', timeout));
-
-                        return Promise.all(promises);
-                    }).then(() => {
-                        resolve();
-                    });
-                });
-
-
+                return chartHandler.createAllCharts();
             case 'createhospitalization':
                 return chartHandler.createHospitalizationCharts();
             default:
