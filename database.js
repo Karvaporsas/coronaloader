@@ -20,6 +20,7 @@ const THL_CASES_LINK = process.env.THL_CASES_LINK;
 const CASE_BUCKET = process.env.CASE_BUCKET;
 const UPDATE_TRESHOLD_DAYS = process.env.UPDATE_TRESHOLD_DAYS || 8;
 const HOSPITALIZED_TABLE = process.env.HOSPITALIZED_TABLE;
+const VACCINATIONS_TABLE = process.env.VACCINATIONS_TABLE;
 const DATE_TIME_SORT_STRING_FORMAT = 'YYYY-MM-DD HH:mm:ss';
 const DATE_SORT_STRING_FORMAT = 'YYYY-MM-DD';
 const SORT_STRING_COL_NAME = 'dateSortString';
@@ -128,6 +129,9 @@ module.exports = {
                         if (res) this.insertCases.push(res);
                     }));
                 }
+                for (const vaccination of cases.vaccinations) {
+
+                }
 
                 Promise.all(promises).then(() => {
                     resolve({status: 1, message: `${insertedCases.length} cases inserted`, amount: insertedCases.length});
@@ -155,6 +159,7 @@ module.exports = {
                 var deaths = [];
                 var recovered = [];
                 var hospitalizations = [];
+                var vaccinations = [];
                 var inputCasesTreshold = moment().subtract(treshold, 'days');
                 const inputCasesTresholdString = inputCasesTreshold.format(DATE_SORT_STRING_FORMAT);
 
@@ -178,11 +183,17 @@ module.exports = {
                         hospitalizations.push(hh);
                     }
                 }
+                for (const vv of cases.vaccinations) {
+                    if (moment(vv.date).format(DATE_SORT_STRING_FORMAT) >= inputCasesTresholdString) {
+                        vaccinations.push(vv);
+                    }
+                }
 
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, treshold));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
                 initialPromises.push(this.getHospitalizations(treshold));
+                initialPromises.push(this.getVaccinations(treshold));
 
                 /*initialPromises.push(this.updateDateOfCases(CONFIRMED_TABLE));
                 initialPromises.push(this.updateDateOfCases(DEATHS_TABLE));
@@ -200,9 +211,11 @@ module.exports = {
                     var tresholdFilteredDeaths = allInitialResults[1];
                     var tresholdFilteredRecovered = allInitialResults[2];
                     var tresholdFilteredHospitalizations = allInitialResults[3];
+                    var tresholdFilteredVaccinations = allInitialResults[4];
                     var initialResultHashTable = {};
                     var deathsHashTable = {};
                     var hospitalizationHashTable = {};
+                    var vaccinationHasTable = {};
 
                     for (const filteredConfirmedCase of tresholdFilteredConfirmed) {
                         initialResultHashTable[filteredConfirmedCase.id] = filteredConfirmedCase;
@@ -217,6 +230,11 @@ module.exports = {
                         var key = '' + filteredHospn.area + moment(filteredHospn.date).format(DATE_SORT_STRING_FORMAT);
 
                         hospitalizationHashTable[key] = filteredHospn;
+                    }
+                    for (const vaccination of tresholdFilteredVaccinations) {
+                        var vkey = `${vaccination.area + moment(vaccination.date).format(DATE_SORT_STRING_FORMAT)}`;
+
+                        vaccinationHasTable[vkey] = vaccination;
                     }
 
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
@@ -308,6 +326,40 @@ module.exports = {
                         }
                     }
                     console.log('Hospitalizations handled in ' + moment().diff(m) + ' milliseconds');
+
+                    for (const vaccination of vaccinations) {
+                        var shouldUpdateOrInsertVaccination = true;
+                        var isNewVaccination = true;
+                        var vfKey = `${vaccination.are + moment(vaccination.date).format(DATE_SORT_STRING_FORMAT)}`;
+                        var oldVaccination = vaccinationHasTable[vfKey];
+
+                        if (oldVaccination) {
+                            isNewVaccination = false;
+                            if (vaccination.shots != oldVaccination.shots) {
+                                shouldUpdateOrInsertVaccination = true;
+                            } else {
+                                shouldUpdateOrInsertVaccination = false;
+                            }
+
+                            if (oldVaccination.longDateString < moment(vaccination.date).format(DATE_TIME_SORT_STRING_FORMAT)) {
+                                shouldUpdateOrInsertVaccination = false;
+                            }
+                        }
+
+                        if (shouldUpdateOrInsertVaccination) {
+                            if (isNewVaccination) {
+                                promises.push(this.insertVaccination(vaccination).then((res) => { //jshint ignore:line
+                                    if (res) updatedCases.push(res);
+                                }));
+                            } else {
+                                promises.push(this.updateVaccinationWithPromise(vaccination).then((res) => { //jshint ignore:line
+                                    if (res) updatedCases.push(res);
+                                }));
+                            }
+                        }
+                    }
+                    console.log('Vaccinations handled in ' + moment().diff(m) + ' milliseconds');
+
                     return Promise.all(promises);
                 }).then(() => {
                     console.log('All handled in ' + moment().diff(m) + ' milliseconds');
@@ -360,6 +412,93 @@ module.exports = {
             });
         });
     },
+    insertVaccination(vaccination) {
+        return new Promise((resolve, reject) => {
+            const self = this;
+            const dateFormatted = moment(vaccination.date).format(DATE_SORT_STRING_FORMAT);
+            vaccination[SORT_STRING_COL_NAME] = dateFormatted;
+            vaccination.longDateString = moment(vaccination.date).format(DATE_TIME_SORT_STRING_FORMAT);
+            vaccination.date = dateFormatted;
+
+            var params = {
+                TableName: VACCINATIONS_TABLE,
+                Item: vaccination,
+                ConditionExpression: 'attribute_not_exists(area) AND attribute_not_exists(#date)',
+                ExpressionAttributeNames: {
+                    '#date': 'date'
+                }
+            };
+
+            dynamoDb.put(params, function (err) {
+                if (err && err.code !== 'ConditionalCheckFailedException') {
+                    console.log('Error inserting vaccination');
+                    console.log(err);
+                    reject(err);
+                } else if (err && err.code === 'ConditionalCheckFailedException') {
+                    self.updateVaccination(vaccination, resolve, reject);
+                } else {
+                    resolve(vaccination);
+                }
+            });
+        });
+    },
+    updateVaccinationWithPromise(vaccination) {
+        return new Promise((resolve, reject) => {
+            this.updateVaccination(vaccination, resolve, reject);
+        });
+    },
+    updateVaccination(vaccination, resolve, reject) {
+        var params = {
+            TableName: VACCINATIONS_TABLE,
+            Key: {
+                'area': vaccination.area,
+                'date': vaccination.date
+            },
+            UpdateExpression: 'set #shots = :shots',
+            ExpressionAttributeNames: {
+                '#shots': 'shots',
+            },
+            ExpressionAttributeValues: {
+                ':shots': vaccination.shots
+            }
+        };
+
+        dynamoDb.update(params, function (err, data) {
+            if (err) {
+                console.log('Error while updating vaccination');
+                console.log(err);
+                reject(err);
+            } else {
+                resolve(vaccination);
+            }
+        });
+    },
+    getVaccinations(fromSinceDays = 0) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: VACCINATIONS_TABLE,
+                FilterExpression: '#sortString >= :sortStringTreshold',
+                ExpressionAttributeNames: {
+                    '#sortString': SORT_STRING_COL_NAME
+                },
+                ExpressionAttributeValues: {
+                    ':sortStringTreshold': moment().subtract(fromSinceDays, 'days').format(DATE_SORT_STRING_FORMAT)
+                }
+            };
+
+            utils.performScan(dynamoDb, params).then((results) => {
+                if (!results || !results.length) {
+                    resolve([]);
+                } else {
+                    resolve(results);
+                }
+            }).catch((e) => {
+                console.log('Error getting vaccinations');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
     insertHospitalization(hospitalization) {
         return new Promise((resolve, reject) => {
             const self = this;
@@ -367,6 +506,7 @@ module.exports = {
             hospitalization[SORT_STRING_COL_NAME] = dateFormatted;
             hospitalization.longDateString = moment(hospitalization.date).format(DATE_TIME_SORT_STRING_FORMAT);
             hospitalization.date = dateFormatted;
+
             var params = {
                 TableName: HOSPITALIZED_TABLE,
                 Item: hospitalization,
@@ -377,7 +517,7 @@ module.exports = {
             };
 
             dynamoDb.put(params, function (err) {
-                if (err&& err.code !== 'ConditionalCheckFailedException') {
+                if (err && err.code !== 'ConditionalCheckFailedException') {
                     console.log('Error inserting hospitalization');
                     console.log(err);
                     reject(err);
@@ -418,7 +558,7 @@ module.exports = {
 
         dynamoDb.update(params, function (err, data) {
             if (err) {
-                console.log('Error while updating confirmed');
+                console.log('Error while updating hospitalization');
                 console.log(err);
                 reject(err);
             } else {

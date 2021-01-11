@@ -26,12 +26,17 @@ module.exports = {
             method: 'GET',
             url: `https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishCoronaHospitalData`
         };
+        const vaccinationOptions = {
+            method: 'GET',
+            url: 'https://w3qa5ydb4l.execute-api.eu-west-1.amazonaws.com/prod/finnishVaccinationData'
+        };
 
         var results = {
             confirmed: [],
             deaths: [],
             recovered: [],
-            hospitalizations: []
+            hospitalizations: [],
+            vaccinations: []
         };
         var currentDate = new Date();
         var currentDateString = currentDate.toLocaleDateString() + ' ' + currentDate.toLocaleTimeString();
@@ -80,6 +85,17 @@ module.exports = {
                 hospitalization.isremoved = false;
                 results.hospitalizations.push(hospitalization);
             }
+
+            return Axios(vaccinationOptions);
+        }).then((vaccinationData) => {
+            console.log('Vaccination data');
+            console.log(vaccinationData);
+            for (const vaccination of vaccinationData.data) {
+                vaccination.insertDate = currentDateString;
+                vaccination.isremoved = false;
+                results.vaccinations.push(vaccination);
+            }
+
             return database.updateOperation(operation);
         }).then(() => {
             resolve({status: 1, cases: results, type: operation.type, message: 'All done'});
