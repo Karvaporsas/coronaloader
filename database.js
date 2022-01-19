@@ -8,6 +8,7 @@ const _ = require('underscore');
 const moment = require('moment');
 const fs = require('fs');
 const utils = require('./utils');
+const { table } = require('console');
 const OPERATIONS_TABLE = process.env.TABLE_OPERATIONS;
 const DEBUG_MODE = process.env.DEBUG_MODE === 'ON';
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
@@ -156,10 +157,10 @@ module.exports = {
             } else {
                 var initialPromises = [];
                 var confirmed = [];
-                var deaths = [];
-                var recovered = [];
-                var hospitalizations = [];
-                var vaccinations = [];
+                //var deaths = [];
+                //var recovered = [];
+                //var hospitalizations = [];
+                //var vaccinations = [];
                 var inputCasesTreshold = moment().subtract(treshold, 'days');
                 const inputCasesTresholdString = inputCasesTreshold.format(DATE_SORT_STRING_FORMAT);
 
@@ -168,32 +169,32 @@ module.exports = {
                         confirmed.push(cc);
                     }
                 }
-                for (const cc of cases.deaths) {
+                /*for (const cc of cases.deaths) {
                     if (moment(cc.date).isAfter(inputCasesTreshold)) {
                         deaths.push(cc);
                     }
-                }
-                for (const cc of cases.recovered) {
+                }*/
+                /*for (const cc of cases.recovered) {
                     if (moment(cc.date).isAfter(inputCasesTreshold)) {
                         recovered.push(cc);
                     }
-                }
-                for (const hh of cases.hospitalizations) {
+                }*/
+                /*for (const hh of cases.hospitalizations) {
                     if (moment(hh.date).format(DATE_SORT_STRING_FORMAT) >= inputCasesTresholdString) {
                         hospitalizations.push(hh);
                     }
-                }
-                for (const vv of cases.vaccinations) {
+                }*/
+                /*for (const vv of cases.vaccinations) {
                     if (moment(vv.date).format(DATE_SORT_STRING_FORMAT) >= inputCasesTresholdString) {
                         vaccinations.push(vv);
                     }
-                }
+                }*/
 
                 initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.CONFIRMED, treshold));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
-                initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
-                initialPromises.push(this.getHospitalizations(treshold));
-                initialPromises.push(this.getVaccinations(treshold));
+                //initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.DEATH, treshold));
+                //initialPromises.push(this.getCaseInfos(CORONA_INFO_TYPE.RECOVERED, treshold));
+                //initialPromises.push(this.getHospitalizations(treshold));
+                //initialPromises.push(this.getVaccinations(treshold));
 
                 /*initialPromises.push(this.updateDateOfCases(CONFIRMED_TABLE));
                 initialPromises.push(this.updateDateOfCases(DEATHS_TABLE));
@@ -208,14 +209,14 @@ module.exports = {
                     console.log('Initial promises got in ' + moment().diff(m) + ' milliseconds');
                     var promises = [];
                     var tresholdFilteredConfirmed = allInitialResults[0];
-                    var tresholdFilteredDeaths = allInitialResults[1];
-                    var tresholdFilteredRecovered = allInitialResults[2];
-                    var tresholdFilteredHospitalizations = allInitialResults[3];
-                    var tresholdFilteredVaccinations = allInitialResults[4];
+                    //var tresholdFilteredDeaths = allInitialResults[1];
+                    //var tresholdFilteredRecovered = allInitialResults[2];
+                    //var tresholdFilteredHospitalizations = allInitialResults[3];
+                    //var tresholdFilteredVaccinations = allInitialResults[4];
                     var initialResultHashTable = {};
-                    var deathsHashTable = {};
-                    var hospitalizationHashTable = {};
-                    var vaccinationHasTable = {};
+                    //var deathsHashTable = {};
+                    //var hospitalizationHashTable = {};
+                    //var vaccinationHasTable = {};
 
                     for (const filteredConfirmedCase of tresholdFilteredConfirmed) {
                         initialResultHashTable[filteredConfirmedCase.id] = filteredConfirmedCase;
@@ -223,35 +224,32 @@ module.exports = {
                             console.log('kurkkaa se');
                         }
                     }
-                    for (const filteredDeath of tresholdFilteredDeaths) {
+                    /*for (const filteredDeath of tresholdFilteredDeaths) {
                         deathsHashTable[filteredDeath.id] = filteredDeath;
-                    }
-                    for (const filteredHospn of tresholdFilteredHospitalizations) {
+                    }*/
+                    /*for (const filteredHospn of tresholdFilteredHospitalizations) {
                         var key = '' + filteredHospn.area + moment(filteredHospn.date).format(DATE_SORT_STRING_FORMAT);
 
                         hospitalizationHashTable[key] = filteredHospn;
-                    }
-                    for (const vaccination of tresholdFilteredVaccinations) {
+                    }*/
+                    /*for (const vaccination of tresholdFilteredVaccinations) {
                         var vkey = `${vaccination.area + moment(vaccination.date).format(DATE_SORT_STRING_FORMAT)}`;
 
                         vaccinationHasTable[vkey] = vaccination;
-                    }
+                    }*/
 
                     for (const toDelete of _getDifference(tresholdFilteredConfirmed, confirmed)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.CONFIRMED, toDelete));
-                        if (toDelete == 'Kymenlaakso_2020-05-01T12:00:00.000Z_1') {
-                            console.log('merkataan poistetuksi');
-                        }
                         updatedCases.push(toDelete);
                     }
-                    for (const toDelete of _getDifference(tresholdFilteredDeaths, deaths)) {
+                    /*for (const toDelete of _getDifference(tresholdFilteredDeaths, deaths)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.DEATH, toDelete));
                         updatedCases.push(toDelete);
-                    }
-                    for (const toDelete of _getDifference(tresholdFilteredRecovered, recovered)) {
+                    }*/
+                    /*for (const toDelete of _getDifference(tresholdFilteredRecovered, recovered)) {
                         promises.push(this.markAsDeleted(CORONA_INFO_TYPE.RECOVERED, toDelete));
                         updatedCases.push(toDelete);
-                    }
+                    }*/
                     console.log('Old deletions handled in ' + moment().diff(m) + ' milliseconds');
                     for (const coronaCase of confirmed) {
                         var shouldUpdateOrInsert = true;
@@ -274,7 +272,7 @@ module.exports = {
                             promises.push(_updateCasePromise(_getOperationType(tresholdFilteredConfirmed, coronaCase.id), CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, updatedCases));
                         }
                     }
-                    for (const coronaCase of deaths) {
+                    /*for (const coronaCase of deaths) {
                         var shouldUpdateOrInsertDeath = true;
                         const oldDeath = deathsHashTable[coronaCase.id];
 
@@ -289,12 +287,12 @@ module.exports = {
                         if (shouldUpdateOrInsertDeath) {
                             promises.push(_updateCasePromise(_getOperationType(tresholdFilteredDeaths, coronaCase.id), CORONA_INFO_TYPE.DEATH, coronaCase, this, updatedCases));
                         }
-                    }
-                    for (const coronaCase of recovered) {
+                    }*/
+                    /*for (const coronaCase of recovered) {
                         promises.push(_updateCasePromise(_getOperationType(tresholdFilteredRecovered, coronaCase.id), CORONA_INFO_TYPE.RECOVERED, coronaCase, this, updatedCases));
-                    }
+                    }*/
                     console.log('Update promises handled in ' + moment().diff(m) + ' milliseconds');
-                    for (const hospitalization of hospitalizations) {
+                    /*for (const hospitalization of hospitalizations) {
                         var shouldUpdateOrInsertHospitalization = true;
                         var isNew = true;
                         var kkey = '' + hospitalization.area + moment(hospitalization.date).format(DATE_SORT_STRING_FORMAT);
@@ -324,10 +322,10 @@ module.exports = {
                                 }));
                             }
                         }
-                    }
+                    }*/
                     console.log('Hospitalizations handled in ' + moment().diff(m) + ' milliseconds');
 
-                    for (const vaccination of vaccinations) {
+                    /*for (const vaccination of vaccinations) {
                         var shouldUpdateOrInsertVaccination = true;
                         var isNewVaccination = true;
                         var vfKey = `${vaccination.are + moment(vaccination.date).format(DATE_SORT_STRING_FORMAT)}`;
@@ -357,11 +355,15 @@ module.exports = {
                                 }));
                             }
                         }
-                    }
+                    }*/
                     console.log('Vaccinations handled in ' + moment().diff(m) + ' milliseconds');
 
                     return Promise.all(promises);
-                }).then(() => {
+                })/*.then(() => {
+                    console.log(`Starting to delete stuff in ${moment().diff(m)} milliseconds`);
+
+                    return this.deleteRemoved(DEATHS_TABLE);
+                })*/.then(() => {
                     console.log('All handled in ' + moment().diff(m) + ' milliseconds');
                     resolve({status: 1, message: `${updatedCases.length} cases updated`, amount: updatedCases.length});
                 }).catch((e) => {
@@ -991,6 +993,67 @@ module.exports = {
                 resolve(confirmedCases);
             }).catch((e) => {
                 console.log('Error getting confirmed cases');
+                console.log(e);
+                reject(e);
+            });
+        });
+    },
+    deleteRemoved(tableName) {
+        return new Promise((resolve, reject) => {
+            var self = this;
+            this.getRemovedCases(tableName).then(removedCases => {
+                console.log('Got ' + removedCases.length + ' cases to remove from ' + tableName);
+                var promises = [];
+
+                for (const rc of removedCases) {
+                    promises.push(self.deleteItem(tableName, rc));
+                }
+
+                Promise.all(promises).then(function () {
+                    resolve();
+                }).catch(e => {
+                    console.log('Error removing cases cases');
+                    console.log(e);
+                    reject(e);
+                });
+            });
+        });
+    },
+    deleteItem(tableName, item) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName,
+                Key:  item.id
+            };
+
+            dynamoDb.deleteItem(params, function (err, data) {
+                if (err) {
+                    console.log('Error deleting item from ' + tableName + ' and id ' + item.id);
+                    console.log(err);
+                    reject(err);
+                } else {
+                    resolve(1);
+                }
+            });
+        });
+    },
+    getRemovedCases(tableName) {
+        return new Promise((resolve, reject) => {
+            var params = {
+                TableName: tableName,
+                FilterExpression: '#isremoved = :isremoved',
+                ExpressionAttributeNames: {
+                    '#isremoved': 'isremoved'
+                },
+                ExpressionAttributeValues: {
+                    ':isremoved': true
+                }
+            };
+
+            utils.performScan(dynamoDb, params).then(removedCases => {
+                resolve(removedCases);
+            }).catch((e) => {
+                console.log('Error getting removed cases');
                 console.log(e);
                 reject(e);
             });

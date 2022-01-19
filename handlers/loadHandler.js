@@ -60,7 +60,7 @@ module.exports = {
                                 finalPromises.push(chartHandler.createCharts());
                             }
 
-                            finalPromises.push(chartHandler.createHospitalizationCharts());
+                            //finalPromises.push(chartHandler.createHospitalizationCharts());
                         } else {
                             finalPromises.push(new Promise((innerResolve, innerReject) => {
                                 innerResolve();
