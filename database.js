@@ -119,20 +119,20 @@ module.exports = {
                 for (const coronaCase of cases.confirmed) {
                     promises.push(_insertCasePromise(CORONA_INFO_TYPE.CONFIRMED, coronaCase, this, insertedCases));
                 }
-                for (const coronaCase of cases.deaths) {
+                /*for (const coronaCase of cases.deaths) {
                     promises.push(_insertCasePromise(CORONA_INFO_TYPE.DEATH, coronaCase, this, insertedCases));
-                }
-                for (const coronaCase of cases.recovered) {
+                }*/
+                /*for (const coronaCase of cases.recovered) {
                     promises.push(_insertCasePromise(CORONA_INFO_TYPE.RECOVERED, coronaCase, this, insertedCases));
-                }
-                for (const hospitalization of cases.hospitalizations) {
+                }*/
+                /*for (const hospitalization of cases.hospitalizations) {
                     promises.push(this.insertHospitalization(hospitalization).then((res) => {
                         if (res) this.insertCases.push(res);
                     }));
-                }
-                for (const vaccination of cases.vaccinations) {
+                }*/
+                /*for (const vaccination of cases.vaccinations) {
 
-                }
+                }*/
 
                 Promise.all(promises).then(() => {
                     resolve({status: 1, message: `${insertedCases.length} cases inserted`, amount: insertedCases.length});
